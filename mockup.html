@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sidekix v4</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root{--accent:#D4FF3F;--bg:#0A0A0A;--bg2:#111;--bg3:#161616;--card:#141414;--border:#1e1e1e;--border2:#2a2a2a;--text1:#fff;--text2:#888;--text3:#444;--nav-bg:#0e0e0e;--nav-border:#1a1a1a;--pill-bg:#1a1a1a}
+body.light{--bg:#F2F1EC;--bg2:#ECEAE3;--bg3:#E5E3DC;--card:#fff;--border:#E0DDD4;--border2:#D0CEC5;--text1:#1a1a1a;--text2:#666;--text3:#999;--nav-bg:#fff;--nav-border:#E8E6DF;--pill-bg:#E8E6DF}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0a0a0a;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;font-family:'DM Sans',sans-serif;padding:28px 12px 60px;transition:background .3s}
+body.light{background:#e8e6df}
+.page-wrap{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;justify-content:center;max-width:1000px;width:100%}
+.mode-toggle-wrap{display:flex;align-items:center;gap:7px;margin-bottom:10px}
+.mode-btn{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:5px 11px;border-radius:20px;cursor:pointer;border:1px solid #333;color:#555;background:transparent;transition:all .2s}
+.mode-btn.active{background:var(--accent);color:#0a0a0a;border-color:var(--accent)}
+.left-col{display:flex;flex-direction:column}
+.screen-label{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:#444;cursor:pointer;padding:6px 9px;border-radius:8px;transition:all .2s;white-space:nowrap;border:1px solid transparent}
+.screen-label.active{color:var(--accent);border-color:#D4FF3F22;background:#D4FF3F08}
+body.light .screen-label{color:#999}
+body.light .screen-label.active{color:#5a7a00;border-color:#5a7a0022;background:#5a7a0008}
+.screen-label:hover:not(.active){color:#888}
+.phone{width:318px;height:660px;background:var(--bg2);border-radius:44px;border:2px solid var(--border2);overflow:hidden;position:relative;flex-shrink:0;box-shadow:0 50px 100px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.04);transition:background .3s,border-color .3s}
+.notch{width:96px;height:26px;background:var(--bg2);border-radius:0 0 16px 16px;position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:100;display:flex;align-items:center;justify-content:center;gap:5px;transition:background .3s}
+.nd{width:7px;height:7px;border-radius:50%;background:var(--border2)}
+.np{width:36px;height:4px;border-radius:2px;background:var(--border2)}
+.screen{width:100%;height:100%;overflow:hidden;display:none;flex-direction:column;background:var(--bg);position:relative;transition:background .3s}
+.screen.active{display:flex}
+.scroll-area{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.scroll-area::-webkit-scrollbar{display:none}
+.sb{padding:10px 18px 0;display:flex;justify-content:space-between;align-items:center;margin-top:26px;flex-shrink:0}
+.sb-t{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--text1)}
+.sb-i{font-size:10px;color:var(--text1)}
+.bnav{display:flex;justify-content:space-around;align-items:center;padding:9px 0 18px;background:var(--nav-bg);border-top:1px solid var(--nav-border);flex-shrink:0;transition:all .3s}
+.ni{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:3px 10px;transition:all .2s}
+.ni-icon{font-size:18px;line-height:1;transition:transform .2s;color:var(--text2);display:flex;align-items:center;justify-content:center}
+.ni.active .ni-icon{transform:scale(1.1);color:var(--accent)}
+body.light .ni.active .ni-icon{color:#5a7a00}
+.ni-label{font-size:9px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);transition:color .2s}
+.ni.active .ni-label{color:var(--accent)}
+body.light .ni.active .ni-label{color:#5a7a00}
+.wordmark{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text1);letter-spacing:-.02em}
+.wordmark span{color:var(--accent)}
+body.light .wordmark span{color:#5a7a00}
+.section-title{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text3)}
+.section-action{font-size:11px;color:var(--accent);cursor:pointer}
+body.light .section-action{color:#5a7a00}
+.timer-pill{display:inline-flex;align-items:center;gap:5px;background:var(--pill-bg);border:1px solid var(--border2);border-radius:20px;padding:5px 11px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--accent)}
+body.light .timer-pill{color:#5a7a00}
+.pill-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:blink 1.2s infinite}
+body.light .pill-dot{background:#5a7a00}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.img-1{background:linear-gradient(135deg,#f6d365,#fda085)}
+.img-2{background:linear-gradient(135deg,#a18cd1,#fbc2eb)}
+.img-3{background:linear-gradient(135deg,#84fab0,#8fd3f4)}
+.img-4{background:linear-gradient(135deg,#f093fb,#f5576c)}
+.img-5{background:linear-gradient(135deg,#4facfe,#00f2fe)}
+.img-6{background:linear-gradient(135deg,#43e97b,#38f9d7)}
+.img-7{background:linear-gradient(135deg,#fa709a,#fee140)}
+.img-8{background:linear-gradient(135deg,#a1c4fd,#c2e9fb)}
+.img-9{background:linear-gradient(135deg,#ffecd2,#fcb69f)}
+
+/* ---- GUEST ---- */
+.guest-blurred-wrap{margin:0 18px;position:relative;border-radius:14px;overflow:hidden}
+.guest-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;filter:blur(9px);transform:scale(1.03);pointer-events:none}
+.guest-card{border-radius:10px;overflow:hidden;aspect-ratio:3/4}
+.guest-grid-lock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:rgba(0,0,0,.22);border-radius:14px}
+body.light .guest-grid-lock{background:rgba(255,255,255,.25)}
+.guest-lock-icon{font-size:28px}
+.guest-banner{margin:14px 18px 0;background:linear-gradient(135deg,#D4FF3F14,#D4FF3F06);border:1px solid #D4FF3F30;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:10px}
+body.light .guest-banner{background:linear-gradient(135deg,#5a7a0014,#5a7a0006);border-color:#5a7a0030}
+.guest-banner-text{flex:1;font-size:12px;color:var(--text2);line-height:1.4}
+.guest-banner-text strong{display:block;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--text1);margin-bottom:2px}
+.join-btn{background:var(--accent);color:#0a0a0a;font-family:'Syne',sans-serif;font-size:11px;font-weight:800;border-radius:20px;padding:7px 14px;cursor:pointer;border:none;white-space:nowrap}
+body.light .join-btn{background:#5a7a00;color:#fff}
+
+/* ---- ONBOARDING ---- */
+.onboard-step{display:none;flex-direction:column;height:100%;padding:0}
+.onboard-step.active{display:flex}
+.onboard-top{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 28px 20px;text-align:center}
+.onboard-emoji{font-size:42px;margin-bottom:16px}
+.onboard-title{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--text1);letter-spacing:-.02em;line-height:1.1;margin-bottom:10px}
+.onboard-title em{color:var(--accent);font-style:normal}
+body.light .onboard-title em{color:#5a7a00}
+.onboard-sub{font-size:13px;color:var(--text2);line-height:1.55}
+.onboard-bottom{padding:0 24px 32px}
+.onboard-primary{width:100%;background:var(--accent);color:#0a0a0a;font-family:'Syne',sans-serif;font-size:15px;font-weight:800;border-radius:50px;padding:16px;border:none;cursor:pointer;transition:transform .15s}
+.onboard-primary:active{transform:scale(.97)}
+body.light .onboard-primary{background:#5a7a00;color:#fff}
+.onboard-secondary{width:100%;background:transparent;color:var(--text2);font-family:'Syne',sans-serif;font-size:13px;font-weight:600;border:none;padding:12px;cursor:pointer;margin-top:4px}
+.phone-input-wrap{background:var(--card);border:1.5px solid var(--border2);border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.phone-flag{font-size:18px}
+.phone-input-text{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--text1);letter-spacing:.05em}
+.phone-cursor{display:inline-block;width:2px;height:18px;background:var(--accent);margin-left:2px;animation:blink 1s infinite;vertical-align:middle}
+body.light .phone-cursor{background:#5a7a00}
+.onboard-dots{display:flex;gap:6px;justify-content:center;margin-bottom:20px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--border2);transition:all .2s}
+.dot.active{background:var(--accent);width:18px;border-radius:3px}
+body.light .dot.active{background:#5a7a00}
+.privacy-option{background:var(--card);border:2px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:all .2s;text-align:left;display:flex;align-items:flex-start;gap:12px}
+.privacy-option.selected{border-color:var(--accent);background:#D4FF3F08}
+body.light .privacy-option.selected{border-color:#5a7a00;background:#5a7a0008}
+.priv-icon{font-size:22px;flex-shrink:0;margin-top:2px}
+.priv-label{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--text1);margin-bottom:3px}
+.priv-sub{font-size:11px;color:var(--text2);line-height:1.4}
+
+/* ---- DROP ---- */
+#drop-overlay{position:absolute;inset:0;z-index:200;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s}
+#drop-overlay.visible{opacity:1;pointer-events:all}
+.drop-ring{position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,#D4FF3F10 0%,transparent 70%);animation:ringP 2s ease-in-out infinite}
+@keyframes ringP{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.5}}
+.drop-emoji{font-size:52px;animation:emojiIn .5s cubic-bezier(.34,1.56,.64,1) forwards;transform:scale(0);opacity:0;margin-bottom:10px;position:relative;z-index:1}
+@keyframes emojiIn{to{transform:scale(1);opacity:1}}
+.drop-eye{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);opacity:0;animation:fuSlide .4s .3s forwards;margin-bottom:10px;position:relative;z-index:1}
+body.light .drop-eye{color:#5a7a00}
+.drop-txt{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--text1);letter-spacing:-.02em;line-height:1.05;text-align:center;padding:0 26px;opacity:0;animation:fuSlide .5s .5s forwards;position:relative;z-index:1}
+.drop-txt em{color:var(--accent);font-style:normal}
+body.light .drop-txt em{color:#5a7a00}
+.drop-sub{font-size:13px;color:var(--text2);margin-top:8px;text-align:center;opacity:0;animation:fuSlide .4s .8s forwards;position:relative;z-index:1}
+.drop-cta{margin-top:28px;background:var(--accent);color:#0A0A0A;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;border-radius:50px;padding:14px 36px;cursor:pointer;border:none;opacity:0;animation:fuSlide .4s 1s forwards;position:relative;z-index:1;transition:transform .15s}
+.drop-cta:active{transform:scale(.96)}
+body.light .drop-cta{background:#5a7a00;color:#fff}
+@keyframes fuSlide{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.confetti-wrap{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.cp{position:absolute;width:6px;height:10px;border-radius:2px;opacity:0;animation:cfall linear forwards}
+@keyframes cfall{0%{transform:translateY(-20px)rotate(0deg);opacity:1}100%{transform:translateY(680px)rotate(720deg);opacity:0}}
+#notif-bubble{position:absolute;top:38px;left:12px;right:12px;background:rgba(20,20,20,.96);backdrop-filter:blur(10px);border:1px solid #2a2a2a;border-radius:16px;padding:11px 13px;z-index:150;transform:translateY(-80px);opacity:0;transition:transform .4s cubic-bezier(.34,1.3,.64,1),opacity .3s;display:flex;align-items:center;gap:10px;pointer-events:none}
+body.light #notif-bubble{background:rgba(255,255,255,.96);border-color:#ddd}
+#notif-bubble.show{transform:translateY(0);opacity:1}
+.notif-icon{width:34px;height:34px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+body.light .notif-icon{background:#5a7a00}
+.notif-app{font-family:'Syne',sans-serif;font-size:9px;font-weight:700;color:var(--text2);margin-bottom:1px;letter-spacing:.06em}
+.notif-msg{font-size:12px;color:var(--text1);line-height:1.3}
+.notif-time{font-size:10px;color:var(--text3);flex-shrink:0}
+
+/* ---- TODAY ---- */
+.top-row{padding:12px 18px 0;display:flex;justify-content:space-between;align-items:center}
+.challenge-hero{padding:18px 18px 0}
+.challenge-tag{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);margin-bottom:7px}
+.challenge-text{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--text1);line-height:1.1;letter-spacing:-.02em;margin-bottom:5px}
+.challenge-text em{color:var(--accent);font-style:normal}
+body.light .challenge-text em{color:#5a7a00}
+.challenge-sub{font-size:12px;color:var(--text2);line-height:1.4}
+.submit-zone{margin:14px 18px 0;background:var(--card);border:1.5px dashed var(--border2);border-radius:16px;height:155px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;cursor:pointer;transition:all .2s}
+.submit-zone:hover{border-color:#D4FF3F55}
+.sz-icon{font-size:28px}.sz-text{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text1)}.sz-sub{font-size:11px;color:var(--text3)}
+.sh{padding:16px 18px 8px;display:flex;justify-content:space-between;align-items:center}
+.preview-strip{display:flex;gap:7px;padding:0 18px;overflow-x:auto;scrollbar-width:none}
+.preview-strip::-webkit-scrollbar{display:none}
+.pc{flex-shrink:0;width:72px;height:72px;border-radius:10px;overflow:hidden;position:relative}
+.pi{width:100%;height:100%}
+.pv{position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.72);border-radius:6px;padding:1px 5px;font-size:9px;font-family:'Syne',sans-serif;font-weight:700;color:var(--accent)}
+body.light .pv{color:#5a7a00}
+.past-item{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:0 18px 7px}
+.past-thumb{width:34px;height:34px;border-radius:8px;flex-shrink:0}
+.past-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--text1)}
+.past-meta{font-size:10px;color:var(--text3);margin-top:1px}
+.done{color:var(--accent);font-family:'Syne',sans-serif;font-size:10px;font-weight:700}
+body.light .done{color:#5a7a00}
+.missed{color:var(--text3);font-family:'Syne',sans-serif;font-size:10px;font-weight:700}
+
+/* ---- FEED ---- */
+.feed-header{padding:12px 18px 0}
+.feed-title-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.feed-title{font-family:'Syne',sans-serif;font-size:21px;font-weight:800;color:var(--text1);letter-spacing:-.02em}
+.toggle-wrap{background:var(--pill-bg);border-radius:20px;padding:3px;display:flex}
+.tb{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:5px 11px;border-radius:16px;cursor:pointer;transition:all .2s;color:var(--text3)}
+.tb.active{background:var(--accent);color:#0A0A0A}
+body.light .tb.active{background:#5a7a00;color:#fff}
+.feed-prompt-strip{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 13px;margin-bottom:11px;display:flex;align-items:center;gap:9px}
+.fpd{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0}
+body.light .fpd{background:#5a7a00}
+.fpt{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--text1);flex:1}
+.fpc{font-size:11px;color:var(--text3)}
+.feed-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 18px 16px}
+.feed-card{border-radius:12px;overflow:hidden;position:relative;cursor:pointer}
+.fci{width:100%}
+.fco{position:absolute;bottom:0;left:0;right:0;padding:22px 9px 8px;background:linear-gradient(transparent,rgba(0,0,0,.8));display:flex;justify-content:space-between;align-items:flex-end}
+.fcu{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#fff}
+.anon-label{color:#aaa}
+/* Feed upvote — sits top-right */
+.feed-upvote{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;align-items:center;gap:1px;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);border-radius:8px;padding:5px 7px;cursor:pointer;border:1px solid transparent;transition:all .15s}
+.feed-upvote:active{transform:scale(.93)}
+.feed-upvote.voted{background:rgba(212,255,63,.15);border-color:rgba(212,255,63,.4)}
+.fu-arrow{font-size:11px;color:rgba(255,255,255,.5);transition:color .15s}
+.fu-count{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;color:rgba(255,255,255,.5);transition:color .15s}
+.feed-upvote.voted .fu-arrow,.feed-upvote.voted .fu-count{color:#D4FF3F}
+.friends-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 28px;text-align:center;gap:10px}
+.fe-sub{font-size:12px;color:var(--text2);line-height:1.5}
+.fe-btn{background:var(--accent);color:#0a0a0a;font-family:'Syne',sans-serif;font-size:12px;font-weight:800;border-radius:20px;padding:9px 20px;border:none;cursor:pointer;margin-top:4px}
+body.light .fe-btn{background:#5a7a00;color:#fff}
+
+/* ---- UPLOAD ---- */
+.upload-header{padding:16px 18px 0;display:flex;align-items:center;gap:12px}
+.back-btn{font-size:18px;cursor:pointer;color:var(--text1)}
+.upload-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--text1)}
+.upload-challenge-strip{margin:14px 18px 0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:11px 13px;display:flex;align-items:center;gap:8px}
+.ucs-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0}
+body.light .ucs-dot{background:#5a7a00}
+.ucs-text{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--text1)}
+.media-tabs{display:flex;gap:6px;padding:14px 18px 0}
+.media-tab{flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:9px 8px;text-align:center;cursor:pointer;transition:all .2s}
+.media-tab.active{border-color:var(--accent);background:#D4FF3F08}
+body.light .media-tab.active{border-color:#5a7a00;background:#5a7a0008}
+.mt-icon{font-size:18px;margin-bottom:3px}
+.mt-label{font-family:'Syne',sans-serif;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+.media-tab.active .mt-label{color:var(--accent)}
+body.light .media-tab.active .mt-label{color:#5a7a00}
+.upload-preview{margin:14px 18px 0;background:var(--card);border:1.5px dashed var(--border2);border-radius:16px;height:170px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;cursor:pointer}
+.up-icon{font-size:32px}.up-text{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text1)}.up-sub{font-size:11px;color:var(--text3)}
+.anon-toggle-row{margin:14px 18px 0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 14px;display:flex;align-items:center;gap:12px}
+.at-icon{font-size:18px;flex-shrink:0}
+.at-text{flex:1}
+.at-label{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text1)}
+.at-sub{font-size:11px;color:var(--text2);margin-top:1px}
+.ts{width:42px;height:24px;border-radius:12px;background:var(--bg3);border:1px solid var(--border2);position:relative;cursor:pointer;transition:background .25s,border-color .25s;flex-shrink:0}
+.ts.on{background:var(--accent);border-color:var(--accent)}
+body.light .ts.on{background:#5a7a00;border-color:#5a7a00}
+.tk{width:18px;height:18px;border-radius:50%;background:var(--text3);position:absolute;top:2px;left:3px;transition:transform .25s cubic-bezier(.34,1.4,.64,1),background .25s}
+.ts.on .tk{transform:translateX(18px);background:#0A0A0A}
+body.light .ts.on .tk{background:#fff}
+.anon-note{margin:10px 18px 0;font-size:11px;color:var(--text3);line-height:1.4;padding:0 2px}
+.submit-btn{margin:14px 18px 0;width:calc(100% - 36px);background:var(--accent);color:#0a0a0a;font-family:'Syne',sans-serif;font-size:15px;font-weight:800;border-radius:50px;padding:15px;border:none;cursor:pointer}
+body.light .submit-btn{background:#5a7a00;color:#fff}
+
+/* ---- LEADERBOARD ---- */
+.lead-header{padding:12px 18px 12px}
+.lead-title{font-family:'Syne',sans-serif;font-size:21px;font-weight:800;color:var(--text1);letter-spacing:-.02em;margin-bottom:2px}
+.lead-sub{font-size:12px;color:var(--text3)}
+.first-prize{margin:0 18px 10px;background:linear-gradient(135deg,#D4FF3F18,#D4FF3F06);border:1px solid #D4FF3F35;border-radius:14px;padding:13px 14px}
+body.light .first-prize{background:linear-gradient(135deg,#5a7a0018,#5a7a0006);border-color:#5a7a0035}
+.fp-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.fp-icon{font-size:24px}
+.fp-label{font-family:'Syne',sans-serif;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+body.light .fp-label{color:#5a7a00}
+.fp-value{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text1)}
+.fp-sponsor{font-size:10px;color:var(--text3)}
+.fp-bar{background:var(--bg3);border-radius:6px;height:4px;overflow:hidden;margin-top:4px}
+.fp-bar-fill{height:100%;background:var(--accent);border-radius:6px;width:67%}
+body.light .fp-bar-fill{background:#5a7a00}
+.fp-prog{display:flex;justify-content:space-between;margin-top:3px}
+.fp-prog span{font-family:'Syne',sans-serif;font-size:9px;font-weight:700;color:var(--text3)}
+.fp-prog .today{color:var(--accent)}
+body.light .fp-prog .today{color:#5a7a00}
+.lead-tabs{display:flex;gap:0;padding:0 18px 8px}
+.lt{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:6px 12px;border-radius:20px;cursor:pointer;color:var(--text3);transition:all .2s}
+.lt.active{background:var(--bg3);color:var(--text1)}
+.lead-list{padding:0 18px;display:flex;flex-direction:column;gap:7px}
+.lead-item{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;cursor:pointer;transition:border-color .2s}
+.lead-item.rank-1{border-color:#D4FF3F55;background:linear-gradient(135deg,#D4FF3F06,var(--card))}
+body.light .lead-item.rank-1{border-color:#5a7a0055}
+.rn{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--text3);width:18px;text-align:center;flex-shrink:0}
+.rank-1 .rn{color:var(--accent)}
+body.light .rank-1 .rn{color:#5a7a00}
+.rank-2 .rn{color:#aaa}
+.rank-3 .rn{color:#8a6000}
+.lt-thumb{width:48px;height:48px;border-radius:10px;flex-shrink:0}
+.li-info{flex:1;min-width:0}
+.li-user{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-cap{font-size:11px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upvote-btn{display:flex;flex-direction:column;align-items:center;gap:1px;background:var(--bg3);border-radius:9px;padding:6px 9px;cursor:pointer;transition:all .15s;flex-shrink:0;border:1px solid transparent}
+.upvote-btn:active{transform:scale(.93)}
+.upvote-btn.voted{background:#D4FF3F18;border-color:#D4FF3F44}
+.upvote-arrow{font-size:12px}
+.upvote-count{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--text3)}
+.upvote-btn.voted .upvote-count{color:var(--accent)}
+body.light .upvote-btn.voted .upvote-count{color:#5a7a00}
+.share-rank-btn{display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:5px 8px;cursor:pointer;font-family:'Syne',sans-serif;font-size:9px;font-weight:700;color:var(--text2);flex-shrink:0;transition:all .15s}
+.share-rank-btn:hover{border-color:var(--accent);color:var(--accent)}
+body.light .share-rank-btn:hover{border-color:#5a7a00;color:#5a7a00}
+.claim-btn{background:var(--accent);color:#0a0a0a;font-family:'Syne',sans-serif;font-size:11px;font-weight:800;border-radius:8px;padding:6px 11px;border:none;cursor:pointer;flex-shrink:0}
+body.light .claim-btn{background:#5a7a00;color:#fff}
+.lead-item.empty{border-style:dashed;border-color:#D4FF3F30}
+body.light .lead-item.empty{border-color:#5a7a0030}
+.my-slot-label{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--accent)}
+body.light .my-slot-label{color:#5a7a00}
+#claim-modal{position:absolute;inset:0;background:rgba(0,0,0,.7);z-index:300;display:none;align-items:flex-end;justify-content:center}
+#claim-modal.show{display:flex}
+.claim-sheet{background:var(--bg2);border-radius:24px 24px 0 0;padding:20px 22px 36px;width:100%;animation:slideUp .3s cubic-bezier(.34,1.2,.64,1)}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.cs-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--text1);margin-bottom:6px}
+.cs-sub{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:16px}
+.cs-input{width:100%;background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:13px 14px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text1);margin-bottom:10px;outline:none}
+.cs-input::placeholder{color:var(--text3)}
+.cs-submit{width:100%;background:var(--accent);color:#0a0a0a;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;border-radius:50px;padding:15px;border:none;cursor:pointer;margin-bottom:8px}
+body.light .cs-submit{background:#5a7a00;color:#fff}
+.cs-close{width:100%;background:transparent;color:var(--text2);font-family:'Syne',sans-serif;font-size:13px;font-weight:600;border:none;padding:8px;cursor:pointer}
+
+/* ---- SHARE CARD ---- */
+.share-header{padding:16px 18px 0;display:flex;align-items:center;gap:12px}
+.share-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--text1)}
+.share-card-preview{margin:14px 18px 0;border-radius:16px;overflow:hidden;position:relative}
+.scp-img{width:100%;aspect-ratio:3/4}
+.scp-overlay{position:absolute;bottom:0;left:0;right:0;padding:36px 14px 14px;background:linear-gradient(transparent,rgba(0,0,0,.85))}
+.scp-challenge{font-size:11px;color:rgba(255,255,255,.7);margin-bottom:4px}
+.scp-rank{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#fff;margin-bottom:2px}
+.scp-votes{font-size:12px;color:#D4FF3F}
+.scp-brand{position:absolute;top:12px;right:12px;font-family:'Syne',sans-serif;font-size:10px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:.06em}
+.share-format-tabs{display:flex;gap:7px;padding:12px 18px 0}
+.sft{flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:8px;text-align:center;cursor:pointer;font-family:'Syne',sans-serif;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;transition:all .2s}
+.sft.active{border-color:var(--accent);color:var(--accent)}
+body.light .sft.active{border-color:#5a7a00;color:#5a7a00}
+.share-apps{display:flex;gap:10px;padding:12px 18px 0}
+.sa{display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex:1}
+.sa-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;background:var(--card);border:1px solid var(--border)}
+.sa-label{font-size:10px;color:var(--text2)}
+.share-or-note{margin:12px 18px 0;font-size:11px;color:var(--text3);text-align:center;line-height:1.5}
+
+/* ---- PROFILE ---- */
+.prof-header{padding:12px 18px 12px}
+.prof-top{display:flex;align-items:center;gap:13px;margin-bottom:12px}
+.prof-avatar{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#D4FF3F,#84fab0);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;cursor:pointer;transition:opacity .2s}
+.prof-avatar:hover{opacity:.8}
+.prof-name{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text1);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.prof-handle{font-size:11px;color:var(--text3);margin-top:1px}
+.prof-edit{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;color:var(--accent);cursor:pointer;letter-spacing:.06em;margin-top:3px}
+body.light .prof-edit{color:#5a7a00}
+.priv-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:11px 13px;margin-bottom:11px}
+.pr-icon{font-size:15px;width:18px;text-align:center;flex-shrink:0}
+.pr-text{flex:1}
+.pr-label{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--text1)}
+.pr-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.prof-stats{display:flex;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:11px}
+.stat-cell{flex:1;padding:11px 8px;text-align:center;border-right:1px solid var(--border)}
+.stat-cell:last-child{border-right:none}
+.sv{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--text1);line-height:1}
+.sv span{color:var(--accent)}
+body.light .sv span{color:#5a7a00}
+.sk{font-size:9px;color:var(--text3);margin-top:3px;letter-spacing:.06em;text-transform:uppercase}
+.streak-row{display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 13px;margin-bottom:11px}
+.streak-badge{background:var(--accent);color:#0a0a0a;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;border-radius:8px;padding:3px 10px}
+body.light .streak-badge{background:#5a7a00;color:#fff}
+.prof-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;padding:0 18px 16px}
+.ptb{aspect-ratio:1;border-radius:6px;overflow:hidden;position:relative}
+.ptbi{width:100%;height:100%}
+.ptbb{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.65);border-radius:4px;padding:1px 5px;font-size:8px;font-family:'Syne',sans-serif;font-weight:700;color:#D4FF3F}
+
+/* ---- MODALS / SHEETS ---- */
+.sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.65);z-index:300;display:none;align-items:flex-end;justify-content:center}
+.sheet-backdrop.show{display:flex}
+.sheet{background:var(--bg2);border-radius:24px 24px 0 0;padding:20px 22px 36px;width:100%;animation:slideUp .3s cubic-bezier(.34,1.2,.64,1)}
+body.light .sheet{background:var(--card)}
+.sheet-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:var(--text1);margin-bottom:6px}
+.sheet-sub{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:16px}
+.sheet-input{width:100%;background:var(--bg3);border:1.5px solid var(--border2);border-radius:12px;padding:13px 14px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text1);margin-bottom:10px;outline:none}
+body.light .sheet-input{background:var(--bg3);color:var(--text1)}
+.sheet-input::placeholder{color:var(--text3)}
+.sheet-primary{width:100%;background:var(--accent);color:#0a0a0a;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;border-radius:50px;padding:14px;border:none;cursor:pointer;margin-bottom:8px}
+body.light .sheet-primary{background:#5a7a00;color:#fff}
+.sheet-close{width:100%;background:transparent;color:var(--text2);font-family:'Syne',sans-serif;font-size:13px;font-weight:600;border:none;padding:8px;cursor:pointer}
+/* add friends contact list */
+.contact-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.contact-item:last-child{border-bottom:none}
+.contact-avatar{width:36px;height:36px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;font-family:'Syne',sans-serif;color:#0a0a0a}
+.contact-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text1);flex:1}
+.contact-handle{font-size:11px;color:var(--text3)}
+.add-btn{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;background:var(--accent);color:#0a0a0a;border:none;border-radius:20px;padding:5px 12px;cursor:pointer;transition:all .2s;flex-shrink:0}
+body.light .add-btn{background:#5a7a00;color:#fff}
+.add-btn.added{background:var(--bg3);color:var(--text3);cursor:default}
+
+/* annotations */
+.annotations{display:flex;flex-direction:column;gap:8px;padding-top:50px;max-width:168px}
+.ann{background:#141414;border:1px solid #1e1e1e;border-radius:10px;padding:9px 12px}
+body.light .ann{background:#fff;border-color:#e0ddd4}
+.ann-head{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+body.light .ann-head{color:#5a7a00}
+.ann-body{font-size:11px;color:var(--text2);line-height:1.45}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+<!-- Left labels -->
+<div class="left-col">
+  <div class="mode-toggle-wrap">
+    <button class="mode-btn active" id="dark-btn" onclick="setMode('dark')">Dark</button>
+    <button class="mode-btn" id="light-btn" onclick="setMode('light')">Light</button>
+  </div>
+  <div class="screen-label active" onclick="switchScreen('guest',this)">Guest view</div>
+  <div class="screen-label" onclick="switchScreen('onboard',this)">Onboarding</div>
+  <div class="screen-label" onclick="switchScreen('drop',this)">Challenge drop 🎬</div>
+  <div class="screen-label" onclick="switchScreen('today',this)">Today</div>
+  <div class="screen-label" onclick="switchScreen('feed',this)">Feed</div>
+  <div class="screen-label" onclick="switchScreen('upload',this)">Upload</div>
+  <div class="screen-label" onclick="switchScreen('lead',this)">Leaderboard</div>
+  <div class="screen-label" onclick="switchScreen('sharecard',this)">Share card</div>
+  <div class="screen-label" onclick="switchScreen('profile',this)">Profile</div>
+</div>
+
+<!-- Phone -->
+<div class="phone">
+  <div class="notch"><div class="nd"></div><div class="np"></div><div class="nd"></div></div>
+
+  <!-- GUEST -->
+  <div class="screen active" id="s-guest">
+    <div class="sb"><div class="sb-t">10:00</div><div class="sb-i">●●● WiFi 🔋</div></div>
+    <div class="scroll-area">
+      <div class="top-row" style="margin-top:4px">
+        <div class="wordmark">side<span>kix</span></div>
+        <div style="font-family:'Syne',sans-serif;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em">GUEST</div>
+      </div>
+      <div class="challenge-hero">
+        <div class="challenge-tag">today's sidequest · #52</div>
+        <div class="challenge-text">find your <em>ick</em> in the wild on campus</div>
+      </div>
+      <div class="guest-banner">
+        <div class="guest-banner-text">
+          <strong>847 people have posted today</strong>
+          Sign up to see their takes and join the leaderboard.
+        </div>
+        <button class="join-btn" onclick="switchScreen('onboard',null,true)">join →</button>
+      </div>
+      <div class="sh"><div class="section-title">Recent submissions</div></div>
+      <!-- Single blurred grid with one lock overlay -->
+      <div class="guest-blurred-wrap">
+        <div class="guest-grid">
+          <div class="guest-card img-4"></div>
+          <div class="guest-card img-7"></div>
+          <div class="guest-card img-1"></div>
+          <div class="guest-card img-3"></div>
+        </div>
+        <div class="guest-grid-lock">
+          <div class="guest-lock-icon">🔒</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:14px 18px 20px;background:var(--nav-bg);border-top:1px solid var(--nav-border)">
+      <button class="submit-btn" onclick="switchScreen('onboard',null,true)" style="margin:0;width:100%">join to participate</button>
+    </div>
+  </div>
+
+  <!-- ONBOARDING -->
+  <div class="screen" id="s-onboard">
+    <div class="onboard-step active" id="ob-1">
+      <div class="sb"><div class="sb-t">10:00</div><div class="sb-i">●●● WiFi 🔋</div></div>
+      <div class="onboard-top">
+        <div class="onboard-dots"><div class="dot active"></div><div class="dot"></div></div>
+        <div class="onboard-emoji">⚡</div>
+        <div class="onboard-title">every day at 10am<br>a <em>sidequest</em> drops.</div>
+        <div class="onboard-sub" style="margin-top:8px">post your take. see what campus is doing. win a weekly prize.</div>
+      </div>
+      <div class="onboard-bottom">
+        <div class="phone-input-wrap">
+          <div class="phone-flag">🇺🇸</div>
+          <div class="phone-input-text">+1 (512) 555-04<span class="phone-cursor"></span></div>
+        </div>
+        <button class="onboard-primary" onclick="nextStep(2)">send code →</button>
+        <button class="onboard-secondary" onclick="switchScreen('guest',null,true)">peek first, sign up later</button>
+      </div>
+    </div>
+    <div class="onboard-step" id="ob-2">
+      <div class="sb"><div class="sb-t">10:00</div><div class="sb-i">●●● WiFi 🔋</div></div>
+      <div class="onboard-top">
+        <div class="onboard-dots"><div class="dot"></div><div class="dot active"></div></div>
+        <div class="onboard-emoji">📲</div>
+        <div class="onboard-title">check your texts</div>
+        <div class="onboard-sub" style="margin-top:8px">we sent a 6-digit code to +1 (512) 555-04</div>
+        <div style="display:flex;gap:8px;margin-top:24px">
+          <div style="flex:1;background:var(--card);border:2px solid var(--accent);border-radius:10px;padding:14px 8px;text-align:center;font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text1)">4</div>
+          <div style="flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center;font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text1)">2</div>
+          <div style="flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center;font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text1)">0</div>
+          <div style="flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center;font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text1)">9</div>
+          <div style="flex:1;background:var(--card);border:2px solid var(--accent);border-radius:10px;padding:14px 8px;text-align:center;font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--accent)"><span class="phone-cursor" style="height:22px"></span></div>
+          <div style="flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center"></div>
+        </div>
+      </div>
+      <div class="onboard-bottom"><button class="onboard-primary" onclick="finishOnboard()">verify →</button></div>
+    </div>
+  </div>
+
+  <!-- DROP -->
+  <div class="screen" id="s-drop">
+    <div id="notif-bubble">
+      <div class="notif-icon">⚡</div>
+      <div style="flex:1"><div class="notif-app">SIDEKIX · NOW</div><div class="notif-msg">today's sidequest just dropped 👀</div></div>
+      <div class="notif-time">10:00</div>
+    </div>
+    <div id="drop-overlay" class="visible">
+      <div class="drop-ring"></div>
+      <div class="confetti-wrap" id="cw"></div>
+      <div class="drop-emoji" id="de">👀</div>
+      <div class="drop-eye">sidequest #52 · today</div>
+      <div class="drop-txt">find your <em>ick</em><br>in the wild on campus</div>
+      <div class="drop-sub">you have until midnight.</div>
+      <button class="drop-cta" onclick="dismissDrop()">let's go →</button>
+    </div>
+    <div class="sb" style="opacity:0"><div class="sb-t">10:00</div></div>
+  </div>
+
+  <!-- TODAY -->
+  <div class="screen" id="s-today">
+    <div class="sb"><div class="sb-t">10:01</div><div class="sb-i">●●● WiFi 🔋</div></div>
+    <div class="scroll-area">
+      <div class="top-row">
+        <div class="wordmark">side<span>kix</span></div>
+        <div class="timer-pill"><div class="pill-dot"></div>13h 59m left</div>
+      </div>
+      <div class="challenge-hero">
+        <div class="challenge-tag">today's sidequest · #52</div>
+        <div class="challenge-text">find your <em>ick</em> in the wild on campus</div>
+        <div class="challenge-sub">847 people have posted so far.</div>
+      </div>
+      <div class="submit-zone" onclick="switchScreen('upload',null,true)">
+        <div class="sz-icon">📸</div>
+        <div class="sz-text">post your take</div>
+        <div class="sz-sub">tap to upload</div>
+      </div>
+      <div class="sh"><div class="section-title">Recent submissions</div><div class="section-action">see all →</div></div>
+      <div class="preview-strip">
+        <div class="pc"><div class="pi img-4"></div><div class="pv">▲ 214</div></div>
+        <div class="pc"><div class="pi img-1"></div><div class="pv">▲ 189</div></div>
+        <div class="pc"><div class="pi img-7"></div><div class="pv">▲ 97</div></div>
+        <div class="pc"><div class="pi img-3"></div><div class="pv">▲ 63</div></div>
+        <div class="pc"><div class="pi img-9"></div><div class="pv">▲ 41</div></div>
+      </div>
+      <div class="sh" style="margin-top:6px"><div class="section-title">Past sidequests</div></div>
+      <div class="past-item"><div class="past-thumb img-6"></div><div style="flex:1"><div class="past-title">show the last photo someone else took of you</div><div class="past-meta">yesterday · 1,204 posts</div></div><div class="done">✓</div></div>
+      <div class="past-item"><div class="past-thumb img-5"></div><div style="flex:1"><div class="past-title">make a "day 1 of" post for something you're not keeping up</div><div class="past-meta">2 days ago · 982 posts</div></div><div class="missed">✗</div></div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="bnav">
+      <div class="ni active"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div class="ni-label">Today</div></div>
+      <div class="ni" onclick="switchScreen('feed',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div><div class="ni-label">Feed</div></div>
+      <div class="ni" onclick="switchScreen('lead',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="5" height="11" rx="1"/><rect x="9.5" y="5" width="5" height="16" rx="1"/><rect x="17" y="13" width="5" height="8" rx="1"/></svg></div><div class="ni-label">Ranks</div></div>
+      <div class="ni" onclick="switchScreen('profile',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="ni-label">You</div></div>
+    </div>
+  </div>
+
+  <!-- FEED -->
+  <div class="screen" id="s-feed">
+    <div class="sb"><div class="sb-t">10:01</div><div class="sb-i">●●● WiFi 🔋</div></div>
+    <div class="feed-header">
+      <div class="feed-title-row">
+        <div class="feed-title">Feed</div>
+        <div class="toggle-wrap">
+          <div class="tb active" id="campus-tb" onclick="switchFeed('campus')">Campus</div>
+          <div class="tb" id="friends-tb" onclick="switchFeed('friends')">Friends</div>
+        </div>
+      </div>
+    </div>
+    <!-- Campus feed -->
+    <div class="scroll-area" id="campus-feed">
+      <div style="padding:10px 18px 10px">
+        <div class="feed-prompt-strip">
+          <div class="fpd"></div>
+          <div class="fpt">"find your ick in the wild on campus"</div>
+          <div class="fpc">847</div>
+        </div>
+      </div>
+      <div class="feed-grid">
+        <div class="feed-card" style="grid-row:span 2">
+          <div class="fci img-4" style="aspect-ratio:2/3"></div>
+          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">214</div></div>
+          <div class="fco"><div class="fcu">@maya</div></div>
+        </div>
+        <div class="feed-card">
+          <div class="fci img-7" style="aspect-ratio:1"></div>
+          <div class="feed-upvote voted" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">97</div></div>
+          <div class="fco"><div class="fcu anon-label">anon</div></div>
+        </div>
+        <div class="feed-card">
+          <div class="fci img-1" style="aspect-ratio:1"></div>
+          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">63</div></div>
+          <div class="fco"><div class="fcu">@priya</div></div>
+        </div>
+        <div class="feed-card">
+          <div class="fci img-3" style="aspect-ratio:3/4"></div>
+          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">44</div></div>
+          <div class="fco"><div class="fcu">@nico</div></div>
+        </div>
+        <div class="feed-card">
+          <div class="fci img-9" style="aspect-ratio:3/4"></div>
+          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">38</div></div>
+          <div class="fco"><div class="fcu anon-label">anon</div></div>
+        </div>
+        <div class="feed-card">
+          <div class="fci img-6" style="aspect-ratio:3/4"></div>
+          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">22</div></div>
+          <div class="fco"><div class="fcu">@seb</div></div>
+        </div>
+        <div class="feed-card">
+          <div class="fci img-2" style="aspect-ratio:3/4"></div>
+          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">19</div></div>
+          <div class="fco"><div class="fcu">@lex</div></div>
+        </div>
+      </div>
+    </div>
+    <!-- Friends feed -->
+    <div class="scroll-area" id="friends-feed" style="display:none">
+      <div style="padding:10px 18px 10px">
+        <div class="feed-prompt-strip">
+          <div class="fpd"></div>
+          <div class="fpt">"find your ick in the wild on campus"</div>
+          <div class="fpc">3</div>
+        </div>
+      </div>
+      <div class="feed-grid">
+        <div class="feed-card" style="grid-row:span 2">
+          <div class="fci img-8" style="aspect-ratio:2/3"></div>
+          <div class="feed-upvote voted" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">88</div></div>
+          <div class="fco"><div class="fcu">@marina</div></div>
+        </div>
+        <div class="feed-card">
+          <div class="fci img-5" style="aspect-ratio:1"></div>
+          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">54</div></div>
+          <div class="fco"><div class="fcu">@jalen</div></div>
+        </div>
+        <div class="feed-card">
+          <div class="fci img-2" style="aspect-ratio:1"></div>
+          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">31</div></div>
+          <div class="fco"><div class="fcu">@dana</div></div>
+        </div>
+      </div>
+      <div class="friends-empty" style="padding-top:16px">
+        <div class="fe-sub">that's everyone for now. more friends = more to see.</div>
+        <button class="fe-btn" onclick="openSheet('add-friends-sheet')">add friends</button>
+      </div>
+    </div>
+    <div class="bnav">
+      <div class="ni" onclick="switchScreen('today',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div class="ni-label">Today</div></div>
+      <div class="ni active"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div><div class="ni-label">Feed</div></div>
+      <div class="ni" onclick="switchScreen('lead',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="5" height="11" rx="1"/><rect x="9.5" y="5" width="5" height="16" rx="1"/><rect x="17" y="13" width="5" height="8" rx="1"/></svg></div><div class="ni-label">Ranks</div></div>
+      <div class="ni" onclick="switchScreen('profile',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="ni-label">You</div></div>
+    </div>
+    <div class="sheet-backdrop" id="add-friends-sheet">
+      <div class="sheet">
+        <div class="sheet-title">add friends</div>
+        <div class="sheet-sub">find people you know on sidekix</div>
+        <input class="sheet-input" placeholder="search by username or phone…" type="text">
+        <div style="margin-top:4px">
+          <div class="contact-item"><div class="contact-avatar" style="background:linear-gradient(135deg,#f6d365,#fda085)">M</div><div style="flex:1"><div class="contact-name">Marina</div><div class="contact-handle">@marina_v</div></div><button class="add-btn" onclick="toggleAddBtn(this)">add</button></div>
+          <div class="contact-item"><div class="contact-avatar" style="background:linear-gradient(135deg,#84fab0,#8fd3f4)">J</div><div style="flex:1"><div class="contact-name">Jalen T</div><div class="contact-handle">@jalen_t</div></div><button class="add-btn" onclick="toggleAddBtn(this)">add</button></div>
+          <div class="contact-item"><div class="contact-avatar" style="background:linear-gradient(135deg,#a18cd1,#fbc2eb)">P</div><div style="flex:1"><div class="contact-name">Priya</div><div class="contact-handle">@priya_k</div></div><button class="add-btn added" disabled>added ✓</button></div>
+          <div class="contact-item"><div class="contact-avatar" style="background:linear-gradient(135deg,#4facfe,#00f2fe)">D</div><div style="flex:1"><div class="contact-name">Dana</div><div class="contact-handle">@dana_r</div></div><button class="add-btn added" disabled>added ✓</button></div>
+        </div>
+        <button class="sheet-close" style="margin-top:12px" onclick="closeSheet('add-friends-sheet')">done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- UPLOAD -->
+  <div class="screen" id="s-upload">
+    <div class="sb"><div class="sb-t">10:01</div><div class="sb-i">●●● WiFi 🔋</div></div>
+    <div class="scroll-area">
+      <div class="upload-header">
+        <div class="back-btn" onclick="switchScreen('today',null,true)">←</div>
+        <div class="upload-title">post your take</div>
+      </div>
+      <div class="upload-challenge-strip">
+        <div class="ucs-dot"></div>
+        <div class="ucs-text">"find your ick in the wild on campus"</div>
+      </div>
+      <div class="media-tabs">
+        <div class="media-tab active" id="mt-camera" onclick="switchMediaTab('camera')"><div class="mt-icon">📷</div><div class="mt-label">Camera</div></div>
+        <div class="media-tab" id="mt-photo" onclick="switchMediaTab('photo')"><div class="mt-icon">🖼️</div><div class="mt-label">Photo</div></div>
+        <div class="media-tab" id="mt-video" onclick="switchMediaTab('video')"><div class="mt-icon">🎬</div><div class="mt-label">Video</div></div>
+        <div class="media-tab" id="mt-text" onclick="switchMediaTab('text')"><div class="mt-icon">✏️</div><div class="mt-label">Text</div></div>
+      </div>
+      <div class="upload-preview">
+        <div class="up-icon">📷</div>
+        <div class="up-text">take or upload a photo</div>
+        <div class="up-sub">tap to open camera</div>
+      </div>
+      <div class="anon-toggle-row">
+        <div class="at-icon">👤</div>
+        <div class="at-text">
+          <div class="at-label">post anonymously</div>
+          <div class="at-sub" id="anon-sub">your username will show publicly</div>
+        </div>
+        <div class="ts" id="anon-ts" onclick="toggleAnon()"><div class="tk"></div></div>
+      </div>
+      <div class="anon-note" id="anon-note" style="display:none">your post will appear as "anon" on the public feed. you still earn upvotes and can appear on the leaderboard.</div>
+      <button class="submit-btn">post it →</button>
+      <div style="height:20px"></div>
+    </div>
+  </div>
+
+  <!-- LEADERBOARD -->
+  <div class="screen" id="s-lead">
+    <div class="sb"><div class="sb-t">10:01</div><div class="sb-i">●●● WiFi 🔋</div></div>
+    <div id="claim-modal">
+      <div class="claim-sheet">
+        <div class="cs-title">🏆 you won this week</div>
+        <div class="cs-sub">enter your venmo or email and we'll send your $30 Epoch Coffee gift card within 24 hours.</div>
+        <input class="cs-input" placeholder="venmo username or email" type="text">
+        <button class="cs-submit">claim my prize →</button>
+        <button class="cs-close" onclick="closeClaim()">close</button>
+      </div>
+    </div>
+
+    <!-- Submission viewer overlay -->
+    <div id="sub-viewer" style="display:none;position:absolute;inset:0;z-index:250;flex-direction:column;background:var(--bg)">
+      <div style="padding:14px 18px 0;display:flex;align-items:center;gap:12px;flex-shrink:0">
+        <div style="font-size:18px;cursor:pointer;color:var(--text1)" onclick="closeSubViewer()">←</div>
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text1)" id="sv-username">@maya_k</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px" id="sv-rank-sub">#1 this week · 214 total upvotes</div>
+        </div>
+      </div>
+      <div style="padding:12px 18px 6px;flex-shrink:0">
+        <div style="font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)">posts this week</div>
+      </div>
+      <div class="scroll-area" style="padding:0 18px 16px">
+        <div id="sv-posts-grid" style="display:flex;flex-direction:column;gap:12px"></div>
+      </div>
+    </div>
+
+    <div class="lead-header">
+      <div class="lead-title">This Week</div>
+      <div class="lead-sub">Mon – Thu · cumulative upvotes · resets sunday midnight</div>
+    </div>
+    <div class="scroll-area">
+      <div class="first-prize">
+        <div class="fp-top">
+          <div class="fp-icon">☕</div>
+          <div>
+            <div class="fp-label">1st place prize · sponsored by epoch coffee</div>
+            <div class="fp-value">$30 gift card</div>
+            <div class="fp-sponsor">most upvotes by sunday midnight wins</div>
+          </div>
+        </div>
+        <div class="fp-bar"><div class="fp-bar-fill"></div></div>
+        <div class="fp-prog"><span>Mon</span><span class="today">Today (Thu)</span><span>Sun</span></div>
+      </div>
+      <div class="lead-tabs"><div class="lt active">This week</div><div class="lt">All time</div></div>
+      <div class="lead-list">
+        <div class="lead-item rank-1" onclick="openSubViewer('@maya_k')">
+          <div class="rn">1</div>
+          <div class="lt-thumb img-4"></div>
+          <div class="li-info"><div class="li-user">@maya_k</div><div class="li-cap">214 upvotes this week</div></div>
+          <button class="claim-btn" onclick="event.stopPropagation();openClaim()">claim 🏆</button>
+        </div>
+        <div class="lead-item rank-2" onclick="openSubViewer('@priya')">
+          <div class="rn">2</div>
+          <div class="lt-thumb img-1"></div>
+          <div class="li-info"><div class="li-user">@priya</div><div class="li-cap">189 upvotes this week</div></div>
+          <div class="share-rank-btn" onclick="event.stopPropagation();switchScreen('sharecard',null,true)">share #2 ↗</div>
+        </div>
+        <div class="lead-item rank-3" onclick="openSubViewer('@seb')">
+          <div class="rn">3</div>
+          <div class="lt-thumb img-7"></div>
+          <div class="li-info"><div class="li-user">@seb</div><div class="li-cap">97 upvotes this week</div></div>
+          <div class="upvote-btn" onclick="event.stopPropagation();toggleVote(this)"><div class="upvote-arrow">▲</div><div class="upvote-count">97</div></div>
+        </div>
+        <div class="lead-item" onclick="openSubViewer('@nico_r')">
+          <div class="rn">4</div>
+          <div class="lt-thumb img-3"></div>
+          <div class="li-info"><div class="li-user">@nico_r</div><div class="li-cap">63 upvotes this week</div></div>
+          <div class="upvote-btn" onclick="event.stopPropagation();toggleVote(this)"><div class="upvote-arrow">▲</div><div class="upvote-count">63</div></div>
+        </div>
+        <div class="lead-item" onclick="openSubViewer('@lex')">
+          <div class="rn">5</div>
+          <div class="lt-thumb img-9"></div>
+          <div class="li-info"><div class="li-user">@lex</div><div class="li-cap">51 upvotes this week</div></div>
+          <div class="upvote-btn voted" onclick="event.stopPropagation();toggleVote(this)"><div class="upvote-arrow">▲</div><div class="upvote-count">51</div></div>
+        </div>
+        <div class="lead-item empty">
+          <div class="rn" style="color:var(--accent)">—</div>
+          <div class="lt-thumb" style="background:var(--bg3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px">📷</div>
+          <div class="li-info"><div class="my-slot-label">you · not posted yet</div><div class="li-cap">post today to earn votes</div></div>
+        </div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="bnav">
+      <div class="ni" onclick="switchScreen('today',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div class="ni-label">Today</div></div>
+      <div class="ni" onclick="switchScreen('feed',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div><div class="ni-label">Feed</div></div>
+      <div class="ni active"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="5" height="11" rx="1"/><rect x="9.5" y="5" width="5" height="16" rx="1"/><rect x="17" y="13" width="5" height="8" rx="1"/></svg></div><div class="ni-label">Ranks</div></div>
+      <div class="ni" onclick="switchScreen('profile',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="ni-label">You</div></div>
+    </div>
+  </div>
+  <div class="screen" id="s-sharecard">
+    <div class="sb"><div class="sb-t">10:01</div><div class="sb-i">●●● WiFi 🔋</div></div>
+    <div class="scroll-area">
+      <div class="share-header">
+        <div class="back-btn" onclick="switchScreen('lead',null,true)">←</div>
+        <div class="share-title">share your rank</div>
+      </div>
+      <div class="share-card-preview">
+        <div class="scp-img img-1"></div>
+        <div class="scp-brand">sidekix.app</div>
+        <div class="scp-overlay">
+          <div class="scp-challenge">"find your ick in the wild on campus"</div>
+          <div class="scp-rank">#2 this week</div>
+          <div class="scp-votes">▲ 189 upvotes</div>
+        </div>
+      </div>
+      <div class="share-format-tabs">
+        <div class="sft active">square</div>
+        <div class="sft">vertical</div>
+        <div class="sft">transparent</div>
+      </div>
+      <div class="share-apps">
+        <div class="sa"><div class="sa-icon">📸</div><div class="sa-label">Instagram</div></div>
+        <div class="sa"><div class="sa-icon">💬</div><div class="sa-label">iMessage</div></div>
+        <div class="sa"><div class="sa-icon">🎵</div><div class="sa-label">TikTok</div></div>
+        <div class="sa"><div class="sa-icon">↗️</div><div class="sa-label">More</div></div>
+      </div>
+      <div class="share-or-note">top 10 can share their rank card.<br>only #1 wins the prize.</div>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="screen" id="s-profile">
+    <div class="sb"><div class="sb-t">10:01</div><div class="sb-i">●●● WiFi 🔋</div></div>
+    <!-- Edit profile sheet -->
+    <div class="sheet-backdrop" id="edit-profile-sheet">
+      <div class="sheet">
+        <div class="sheet-title">edit profile</div>
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+          <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#D4FF3F,#84fab0);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed var(--border2);cursor:pointer">🌵</div>
+          <div style="font-size:12px;color:var(--accent);cursor:pointer;font-family:'Syne',sans-serif;font-weight:700">change photo or emoji</div>
+        </div>
+        <div style="font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:6px">username</div>
+        <input class="sheet-input" value="wandering_cactus42" type="text" id="username-input">
+        <button class="sheet-primary" onclick="saveUsername()">save →</button>
+        <button class="sheet-close" onclick="closeSheet('edit-profile-sheet')">cancel</button>
+      </div>
+    </div>
+    <div class="scroll-area">
+      <div class="prof-header">
+        <div class="prof-top">
+          <div class="prof-avatar" onclick="openSheet('edit-profile-sheet')">🌵</div>
+          <div style="flex:1;min-width:0">
+            <div class="prof-name" id="prof-username-display">wandering_cactus42</div>
+            <div class="prof-handle">tap avatar or name to edit</div>
+            <div class="prof-edit" onclick="openSheet('edit-profile-sheet')">edit profile</div>
+          </div>
+        </div>
+        <!-- Privacy toggle removed — users control visibility per post via anon toggle on upload -->
+
+        <div class="prof-stats">
+          <div class="stat-cell"><div class="sv">31</div><div class="sk">sidequests</div></div>
+          <div class="stat-cell"><div class="sv"><span>1,240</span></div><div class="sk">upvotes</div></div>
+          <div class="stat-cell"><div class="sv">2×</div><div class="sk">won</div></div>
+        </div>
+        <div class="streak-row">
+          <div style="font-size:16px">🔥</div>
+          <div style="flex:1"><div style="font-size:11px;color:var(--text3)">post today to keep it going</div></div>
+          <div class="streak-badge">12</div>
+        </div>
+      </div>
+      <div class="sh" style="padding-top:0"><div class="section-title">your submissions</div></div>
+      <!-- No lock overlays — privacy toggle only affects who sees new submissions, not grid display -->
+      <div class="prof-grid">
+        <div class="ptb"><div class="ptbi img-3"></div><div class="ptbb">▲ 312</div></div>
+        <div class="ptb"><div class="ptbi img-5"></div><div class="ptbb">▲ 189</div></div>
+        <div class="ptb"><div class="ptbi img-8"></div><div class="ptbb">🏆 won</div></div>
+        <div class="ptb"><div class="ptbi img-1"></div></div>
+        <div class="ptb"><div class="ptbi img-4"></div></div>
+        <div class="ptb"><div class="ptbi img-6"></div></div>
+        <div class="ptb"><div class="ptbi img-2"></div></div>
+        <div class="ptb"><div class="ptbi img-7"></div></div>
+        <div class="ptb"><div class="ptbi img-9"></div></div>
+      </div>
+    </div>
+    <div class="bnav">
+      <div class="ni" onclick="switchScreen('today',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div class="ni-label">Today</div></div>
+      <div class="ni" onclick="switchScreen('feed',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div><div class="ni-label">Feed</div></div>
+      <div class="ni" onclick="switchScreen('lead',null,true)"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="5" height="11" rx="1"/><rect x="9.5" y="5" width="5" height="16" rx="1"/><rect x="17" y="13" width="5" height="8" rx="1"/></svg></div><div class="ni-label">Ranks</div></div>
+      <div class="ni active"><div class="ni-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="ni-label">You</div></div>
+    </div>
+  </div>
+
+</div><!-- /phone -->
+
+<!-- Annotations -->
+<div class="annotations">
+  <div class="ann"><div class="ann-head">Guest view</div><div class="ann-body">Challenge visible, single blurred grid with one lock icon. No per-card text. Banner has the 847 count + join CTA.</div></div>
+  <div class="ann"><div class="ann-head">Feed upvotes</div><div class="ann-body">Upvote sits top-right on every card. Greyed when not voted, accent color when voted. Works same as leaderboard.</div></div>
+  <div class="ann"><div class="ann-head">Friends tab default</div><div class="ann-body">If you chose friends-only in onboarding, feed defaults to Friends tab. Public defaults to Campus tab.</div></div>
+  <div class="ann"><div class="ann-head">Add friends</div><div class="ann-body">Button opens a bottom sheet with search + contact list. Add/added states toggle on tap.</div></div>
+  <div class="ann"><div class="ann-head">Edit profile</div><div class="ann-body">Tap avatar or "edit profile" to open sheet. Change emoji/photo + username. Saves to display.</div></div>
+  <div class="ann"><div class="ann-head">Onboarding</div><div class="ann-body">Phone → verify → challenge drop. 2 steps, no friction. Visibility is per-post via the anon toggle on upload.</div></div>
+</div>
+
+</div><!-- /page-wrap -->
+
+<script>
+// Mode
+function setMode(m){document.body.classList.toggle('light',m==='light');document.getElementById('dark-btn').classList.toggle('active',m==='dark');document.getElementById('light-btn').classList.toggle('active',m==='light')}
+
+// Screen switching
+function switchScreen(name,labelEl,fromNav){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('s-'+name).classList.add('active');
+  if(labelEl){document.querySelectorAll('.screen-label').forEach(l=>l.classList.remove('active'));labelEl.classList.add('active')}
+  if(name==='drop')resetDrop();
+  if(name==='feed') switchFeed('campus');
+}
+
+// Onboarding
+function nextStep(n){document.querySelectorAll('.onboard-step').forEach(s=>s.classList.remove('active'));const el=document.getElementById('ob-'+n);if(el)el.classList.add('active')}
+function finishOnboard(){switchScreen('drop',null,true);document.querySelectorAll('.screen-label').forEach((l,i)=>{l.classList.toggle('active',i===2)})}
+
+// Drop
+function resetDrop(){
+  const overlay=document.getElementById('drop-overlay');const notif=document.getElementById('notif-bubble');const emoji=document.getElementById('de');
+  overlay.style.display='flex';overlay.style.opacity='1';overlay.style.pointerEvents='all';
+  emoji.style.animation='none';emoji.offsetHeight;emoji.style.animation='';
+  notif.classList.remove('show');
+  setTimeout(()=>notif.classList.add('show'),500);spawnConfetti();
+  setTimeout(()=>notif.classList.remove('show'),2600);
+}
+function dismissDrop(){
+  const overlay=document.getElementById('drop-overlay');
+  overlay.style.transition='opacity .35s';overlay.style.opacity='0';
+  setTimeout(()=>{overlay.style.display='none';switchScreen('today',null,true);document.querySelectorAll('.screen-label').forEach((l,i)=>l.classList.toggle('active',i===3))},360);
+}
+function spawnConfetti(){
+  const wrap=document.getElementById('cw');wrap.innerHTML='';
+  const cols=['#D4FF3F','#fff','#fda085','#84fab0','#a18cd1','#f5576c'];
+  for(let i=0;i<30;i++){const p=document.createElement('div');p.className='cp';p.style.left=Math.random()*100+'%';p.style.background=cols[Math.floor(Math.random()*cols.length)];p.style.animationDuration=(1.5+Math.random()*2)+'s';p.style.animationDelay=(Math.random()*.9)+'s';wrap.appendChild(p)}
+}
+
+// Feed toggle
+function switchFeed(mode){
+  const isCampus=mode==='campus';
+  document.getElementById('campus-tb').classList.toggle('active',isCampus);
+  document.getElementById('friends-tb').classList.toggle('active',!isCampus);
+  document.getElementById('campus-feed').style.display=isCampus?'block':'none';
+  document.getElementById('friends-feed').style.display=isCampus?'none':'block';
+}
+
+// Feed upvotes
+function toggleFeedVote(btn){
+  const v=btn.classList.contains('voted');const c=btn.querySelector('.fu-count');let n=parseInt(c.textContent);
+  btn.classList.toggle('voted',!v);c.textContent=v?n-1:n+1;
+}
+
+// Leaderboard upvotes
+function toggleVote(btn){const v=btn.classList.contains('voted');const c=btn.querySelector('.upvote-count');let n=parseInt(c.textContent);btn.classList.toggle('voted',!v);c.textContent=v?n-1:n+1}
+
+// Upload: media tab
+function switchMediaTab(tab){['camera','photo','video','text'].forEach(t=>document.getElementById('mt-'+t).classList.remove('active'));document.getElementById('mt-'+tab).classList.add('active')}
+
+// Anon toggle
+let anonOn=false;
+function toggleAnon(){anonOn=!anonOn;document.getElementById('anon-ts').classList.toggle('on',anonOn);document.getElementById('anon-sub').textContent=anonOn?'shown as "anon" on the public feed':'your username will show publicly';document.getElementById('anon-note').style.display=anonOn?'block':'none'}
+
+// Submission viewer — shows all posts from that person this week
+const weeklyPosts = {
+  '@maya_k': [
+    {day:'Mon',img:'img-6',caption:'guy filming himself on segway',votes:44,anon:false},
+    {day:'Tue',img:'img-2',caption:'mandatory fun email in the wild',votes:51,anon:false},
+    {day:'Wed',img:'img-9',caption:'bad group project energy in the lib',votes:38,anon:false},
+    {day:'Thu',img:'img-4',caption:'water fountain near GDC',votes:81,anon:false},
+  ],
+  '@priya': [
+    {day:'Mon',img:'img-3',caption:'loud chewer in the silent zone',votes:62,anon:false},
+    {day:'Wed',img:'img-1',caption:'my roommate chewing loud',votes:89,anon:false},
+    {day:'Thu',img:'img-7',caption:'person explaining something nobody asked',votes:38,anon:false},
+  ],
+  '@seb': [
+    {day:'Tue',img:'img-8',caption:'bluetooth speaker at the lib',votes:35,anon:false},
+    {day:'Thu',img:'img-5',caption:'guy who says um before every sentence',votes:62,anon:false},
+  ],
+  '@nico_r': [
+    {day:'Tue',img:'img-3',caption:'person on phone in elevator',votes:63,anon:false},
+  ],
+  '@lex': [
+    {day:'Mon',img:'img-9',caption:'unsolicited advice guy',votes:28,anon:false},
+    {day:'Wed',img:'img-6',caption:'flip flops in december',votes:23,anon:false},
+  ],
+};
+const rankTotals = {'@maya_k':'214','@priya':'189','@seb':'97','@nico_r':'63','@lex':'51'};
+const rankLabels = {'@maya_k':'#1','@priya':'#2','@seb':'#3','@nico_r':'#4','@lex':'#5'};
+
+function openSubViewer(userKey) {
+  const posts = weeklyPosts[userKey] || [];
+  const displayName = userKey.startsWith('anon') ? 'anon' : userKey;
+  document.getElementById('sv-username').textContent = displayName;
+  document.getElementById('sv-rank-sub').textContent = rankLabels[userKey] + ' this week · ' + rankTotals[userKey] + ' total upvotes';
+  const grid = document.getElementById('sv-posts-grid');
+  grid.innerHTML = '';
+  posts.forEach(p => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;position:relative';
+    if (p.anon) {
+      wrap.innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+          <div style="width:56px;height:56px;border-radius:10px;${p.img} filter:blur(6px);overflow:hidden;flex-shrink:0">
+            <div class="${p.img}" style="width:100%;height:100%"></div>
+          </div>
+          <div>
+            <div style="font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">${p.day}</div>
+            <div style="font-size:12px;color:var(--text3)">anonymous post</div>
+          </div>
+          <div style="margin-left:auto;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--text3)">▲ ${p.votes}</div>
+        </div>`;
+      wrap.querySelector('div[style*="blur"]').style.filter = 'blur(6px)';
+    } else {
+      wrap.innerHTML = `
+        <div style="position:relative;width:100%">
+          <div class="${p.img}" style="width:100%;aspect-ratio:3/2;border-radius:0"></div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:20px 14px 12px;background:linear-gradient(transparent,rgba(0,0,0,.75));display:flex;justify-content:space-between;align-items:flex-end">
+            <div>
+              <div style="font-family:'Syne',sans-serif;font-size:10px;font-weight:700;color:rgba(255,255,255,.6);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px">${p.day}</div>
+              <div style="font-size:13px;color:#fff;font-weight:500">${p.caption}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:1px;background:rgba(0,0,0,.5);border-radius:8px;padding:5px 8px;border:1px solid rgba(255,255,255,.15)">
+              <div style="font-size:11px;color:rgba(255,255,255,.6)">▲</div>
+              <div style="font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#fff">${p.votes}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+    grid.appendChild(wrap);
+  });
+  const viewer = document.getElementById('sub-viewer');
+  viewer.style.display = 'flex';
+}
+function closeSubViewer() {
+  document.getElementById('sub-viewer').style.display = 'none';
+}
+function openClaim(){document.getElementById('claim-modal').classList.add('show')}
+function closeClaim(){document.getElementById('claim-modal').classList.remove('show')}
+
+// Generic sheet open/close
+function openSheet(id){document.getElementById(id).classList.add('show')}
+function closeSheet(id){document.getElementById(id).classList.remove('show')}
+
+// Add friends button toggle
+function toggleAddBtn(btn){btn.textContent='added ✓';btn.classList.add('added');btn.disabled=true}
+
+// Save username
+function saveUsername(){
+  const val=document.getElementById('username-input').value.trim();
+  if(val){document.getElementById('prof-username-display').textContent=val}
+  closeSheet('edit-profile-sheet');
+}
+
+// Init
+window.addEventListener('load',()=>{setTimeout(()=>{document.getElementById('notif-bubble').classList.add('show');spawnConfetti()},700);setTimeout(()=>document.getElementById('notif-bubble').classList.remove('show'),2800)});
+</script>
+</body>
+</html>
