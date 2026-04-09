@@ -22,8 +22,8 @@ import { font, getColors } from '../../src/theme';
 import type { ChallengeRow, PostRow, ProfileRow } from '../../src/types/database';
 
 /**
- * Public share landing: https://share.joinsidekix.com/p/[postId]
- * (OG tags for iMessage still need SSR or a separate HTML generator — this fixes in-browser + in-app opens.)
+ * In-app / client route for `/p/[postId]`. On the web, Vercel rewrites the same path to `api/share-html`
+ * (server HTML + OG). This screen still helps native or client-side navigation.
  */
 export default function PublicPostScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -160,8 +160,8 @@ export default function PublicPostScreen() {
         </Pressable>
         {Platform.OS === 'web' ? (
           <Text style={[styles.webHint, { color: colors.text3, fontFamily: font.dm }]}>
-            Get the app for the full campus feed — link previews in Messages improve once this page has Open Graph
-            tags on the server.
+            Opening this URL directly in a browser usually hits the server share page with Open Graph tags for
+            Messages and other apps.
           </Text>
         ) : null}
       </ScrollView>

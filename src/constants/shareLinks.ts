@@ -1,6 +1,6 @@
 /**
- * Public web origin for OG / iMessage link previews (must serve `/p/[postId]` with meta tags).
- * Change here only if the marketing domain changes.
+ * Public web origin for share URLs. OG / iMessage previews are served by Vercel `api/share-html`
+ * (see vercel.json rewrite for `/p/:postId`).
  */
 export const PUBLIC_SHARE_ORIGIN = 'https://share.joinsidekix.com';
 

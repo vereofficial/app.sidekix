@@ -1,5 +1,8 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/p/:postId", "destination": "/api/share-html?postId=:postId" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
