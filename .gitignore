@@ -6,6 +6,8 @@ node_modules/
 # Expo
 .expo/
 dist/
+
+# Vercel runs `npm run build` and uploads dist/ — do not commit the export output
 web-build/
 expo-env.d.ts
 
