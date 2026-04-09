@@ -331,7 +331,9 @@ export function HomeFlow() {
                   every day at 10am{'\n'}a <Text style={{ color: colors.accent, fontStyle: 'normal' }}>sidequest</Text> drops.
                 </Text>
                 <Text style={[styles.obSub, { color: colors.text2, fontFamily: font.dm }]}>
-                  post your take. see what campus is doing. win a weekly prize.
+                  post your take. see what campus is doing.
+                  {'\n'}
+                  win a weekly prize.
                 </Text>
               </>
             ) : (
@@ -391,64 +393,62 @@ export function HomeFlow() {
                 <Pressable onPress={() => setPhase('guest')}>
                   <Text style={[styles.secondaryBtn, { color: colors.text2, fontFamily: font.syne }]}>peek first, sign up later</Text>
                 </Pressable>
-                {__DEV__ ? (
-                  <View
-                    style={{
-                      marginTop: 22,
-                      paddingTop: 18,
-                      borderTopWidth: StyleSheet.hairlineWidth,
-                      borderTopColor: colors.border2,
+                <View
+                  style={{
+                    marginTop: 22,
+                    paddingTop: 18,
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    borderTopColor: colors.border2,
+                  }}
+                >
+                  <TextInput
+                    value={devEmail}
+                    onChangeText={setDevEmail}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    placeholder="invite@only.com"
+                    placeholderTextColor={colors.text3}
+                    style={[
+                      styles.usernameField,
+                      { marginBottom: 10, backgroundColor: colors.card, borderColor: colors.border2, color: colors.text1 },
+                    ]}
+                  />
+                  <TextInput
+                    value={devPassword}
+                    onChangeText={setDevPassword}
+                    secureTextEntry
+                    placeholder="password"
+                    placeholderTextColor={colors.text3}
+                    style={[
+                      styles.usernameField,
+                      { marginBottom: 12, backgroundColor: colors.card, borderColor: colors.border2, color: colors.text1 },
+                    ]}
+                  />
+                  <Pressable
+                    onPress={async () => {
+                      setFormError(null);
+                      setBusy(true);
+                      const { error } = await signInWithEmailPassword(devEmail, devPassword);
+                      setBusy(false);
+                      if (error) setFormError(error);
                     }}
+                    disabled={busy}
+                    style={({ pressed }) => [
+                      styles.primaryBtn,
+                      {
+                        backgroundColor: colors.bg3,
+                        borderWidth: 1,
+                        borderColor: colors.border2,
+                        opacity: pressed || busy ? 0.85 : 1,
+                      },
+                    ]}
                   >
-                    <TextInput
-                      value={devEmail}
-                      onChangeText={setDevEmail}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="email-address"
-                      placeholder="dev@you.com"
-                      placeholderTextColor={colors.text3}
-                      style={[
-                        styles.usernameField,
-                        { marginBottom: 10, backgroundColor: colors.card, borderColor: colors.border2, color: colors.text1 },
-                      ]}
-                    />
-                    <TextInput
-                      value={devPassword}
-                      onChangeText={setDevPassword}
-                      secureTextEntry
-                      placeholder="password"
-                      placeholderTextColor={colors.text3}
-                      style={[
-                        styles.usernameField,
-                        { marginBottom: 12, backgroundColor: colors.card, borderColor: colors.border2, color: colors.text1 },
-                      ]}
-                    />
-                    <Pressable
-                      onPress={async () => {
-                        setFormError(null);
-                        setBusy(true);
-                        const { error } = await signInWithEmailPassword(devEmail, devPassword);
-                        setBusy(false);
-                        if (error) setFormError(error);
-                      }}
-                      disabled={busy}
-                      style={({ pressed }) => [
-                        styles.primaryBtn,
-                        {
-                          backgroundColor: colors.bg3,
-                          borderWidth: 1,
-                          borderColor: colors.border2,
-                          opacity: pressed || busy ? 0.85 : 1,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.primaryBtnText, { color: colors.text1, fontFamily: font.syne }]}>
-                        dev: sign in with email →
-                      </Text>
-                    </Pressable>
-                  </View>
-                ) : null}
+                    <Text style={[styles.primaryBtnText, { color: colors.text1, fontFamily: font.syne }]}>
+                      sign in with email
+                    </Text>
+                  </Pressable>
+                </View>
               </>
             ) : (
               <Pressable
