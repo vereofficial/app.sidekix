@@ -23,7 +23,8 @@ export function MissingConfigScreen() {
         </Text>
       </View>
       <Text style={[styles.body, { color: colors.text3, fontFamily: font.dm, marginTop: 16 }]}>
-        In PowerShell (example): set the variables in the same session, then start Expo. On EAS, add them as project secrets. Nothing is read from files in the repo.
+        Local: set the same names in your shell, then run Expo. EAS: project secrets. Vercel (web): Project → Settings →
+        Environment Variables → add both for Production, then redeploy. (Names are EXPO_PUBLIC_…, not NEXT_PUBLIC_.)
       </Text>
       <Text style={[styles.body, { color: colors.text2, fontFamily: font.dm, marginTop: 12 }]}>
         In the Supabase dashboard: run <Text style={{ fontFamily: font.dmMedium }}>supabase/schema.sql</Text>, enable Phone
