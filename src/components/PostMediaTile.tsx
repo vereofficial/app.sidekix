@@ -13,10 +13,13 @@ export function PostMediaTile({
   post,
   style,
   borderRadius = 12,
+  /** Tiny squares (e.g. past sidequest row) — tighter text preview. */
+  compact = false,
 }: {
   post: PostLike;
   style?: ViewStyle;
   borderRadius?: number;
+  compact?: boolean;
 }) {
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
@@ -85,22 +88,28 @@ export function PostMediaTile({
           ...base,
           {
             padding: 0,
-            borderWidth: 1.5,
+            borderWidth: compact ? 1 : 1.5,
             borderColor: borderC,
           },
         ]}
       >
-        <View style={styles.textInner}>
+        <View style={[styles.textInner, compact && styles.textInnerCompact]}>
           <LinearGradient
             colors={[accentA, accentB]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
           />
-          <Text style={[styles.textQuote, { color: colors.accent, fontFamily: font.syne }]}>sidekix</Text>
+          {!compact ? (
+            <Text style={[styles.textQuote, { color: colors.accent, fontFamily: font.syne }]}>sidekix</Text>
+          ) : null}
           <Text
-            style={[styles.textBody, { color: colors.text1, fontFamily: font.dm }]}
-            numberOfLines={10}
+            style={[
+              styles.textBody,
+              compact && styles.textBodyCompact,
+              { color: colors.text1, fontFamily: font.dm },
+            ]}
+            numberOfLines={compact ? 5 : 10}
           >
             {cap}
           </Text>
@@ -127,6 +136,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+  textInnerCompact: {
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    minHeight: 0,
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
   textQuote: {
     fontSize: 9,
     letterSpacing: 2,
@@ -138,5 +154,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     letterSpacing: -0.1,
+  },
+  textBodyCompact: {
+    fontSize: 8,
+    lineHeight: 10,
+    letterSpacing: 0,
   },
 });

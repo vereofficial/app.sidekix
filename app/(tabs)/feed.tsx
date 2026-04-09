@@ -18,10 +18,11 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { challengeTag } from '../../src/challenge';
+import { challengeTag, splitChallengeTitle } from '../../src/challenge';
 import { useAuth } from '../../src/context/AuthContext';
 import { useAppTheme } from '../../src/context/AppThemeContext';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
+import { SidekixTabState } from '../../src/components/SidekixTabState';
 import { useFollows } from '../../src/hooks/useFollows';
 import { usePostsForChallenge } from '../../src/hooks/usePostsForChallenge';
 import { useTodayChallenge } from '../../src/hooks/useTodayChallenge';
@@ -48,8 +49,8 @@ export default function FeedScreen() {
   const colors = getColors(resolvedScheme);
   const scheme = resolvedScheme;
   const { user } = useAuth();
-  const { challenge, loading: chLoad } = useTodayChallenge();
-  const { posts, myVoteIds, loading, refresh } = usePostsForChallenge(
+  const { challenge, loading: chLoad, refresh: refCh } = useTodayChallenge();
+  const { posts, myVoteIds, loading, error: postsErr, refresh } = usePostsForChallenge(
     challenge?.id ?? null,
     undefined,
     user?.id,
@@ -130,7 +131,7 @@ export default function FeedScreen() {
 
   const onPull = async () => {
     setRefreshing(true);
-    await Promise.all([refresh(), refFollows(user?.id)]);
+    await Promise.all([refCh(), refresh(), refFollows(user?.id)]);
     setRefreshing(false);
   };
 
@@ -209,11 +210,73 @@ export default function FeedScreen() {
         {!challenge ? (
           chLoad ? (
             <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
+          ) : mode === 'friends' ? (
+            <>
+              <View style={[styles.friendsEmptyWrap, styles.friendsEmptyNoFriends]}>
+                <View style={[styles.addCard, { borderColor: colors.border2, backgroundColor: colors.card }]}>
+                  <Text style={styles.addIcon}>👥</Text>
+                  <Text style={[styles.addTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
+                    add friends to see their posts
+                  </Text>
+                  <Text style={[styles.addSub, { color: colors.text2, fontFamily: font.dm }]}>
+                    once your friends post, you&apos;ll see their takes here.
+                  </Text>
+                  <Pressable
+                    onPress={() => setSheet(true)}
+                    style={({ pressed }) => [
+                      styles.addFriendsCta,
+                      { backgroundColor: colors.accent, opacity: pressed ? 0.92 : 1 },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.addFriendsCtaText,
+                        { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne },
+                      ]}
+                    >
+                      add friends
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+              <SidekixTabState
+                variant="feed"
+                reason="no-challenge"
+                colors={colors}
+                scheme={scheme}
+                minHeight={Math.max(360, winH - insets.top - 380)}
+                showSkeletonBackdrop
+                feedSkeletonSize="friends"
+                onRetry={() => void refCh()}
+              />
+            </>
           ) : (
-            <Text style={[styles.empty, { color: colors.text2, fontFamily: font.dm }]}>No active challenge.</Text>
+            <SidekixTabState
+              variant="feed"
+              reason="no-challenge"
+              colors={colors}
+              scheme={scheme}
+              minHeight={Math.max(400, winH - insets.top - 120)}
+              showSkeletonBackdrop
+              feedSkeletonSize="campus"
+              onRetry={() => void refCh()}
+            />
           )
-        ) : loading || chLoad ? (
+        ) : chLoad ? (
           <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
+        ) : loading ? (
+          <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
+        ) : postsErr ? (
+          <SidekixTabState
+            variant="feed"
+            reason="error"
+            colors={colors}
+            scheme={scheme}
+            minHeight={Math.max(420, winH - insets.top - 100)}
+            showSkeletonBackdrop
+            feedSkeletonSize={mode === 'campus' ? 'campus' : 'friends'}
+            onRetry={() => void refresh()}
+          />
         ) : (
           <>
             {!(mode === 'campus' && visible.length === 0) ? (
@@ -221,8 +284,17 @@ export default function FeedScreen() {
                 <View style={[styles.prompt, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <View style={[styles.fpd, { backgroundColor: colors.accent }]} />
                   <Text style={[styles.fpt, { color: colors.text1, fontFamily: font.syne }]}>
-                    {challengeTag(challenge)} · find your favorite <Text style={{ color: colors.accent }}>bathroom</Text> on{' '}
-                    <Text style={{ color: colors.accent }}>campus</Text>
+                    {challengeTag(challenge)} ·{' '}
+                    {(() => {
+                      const { before, after } = splitChallengeTitle(challenge);
+                      return (
+                        <>
+                          {before}
+                          <Text style={{ color: colors.accent }}>{challenge.emphasis}</Text>
+                          {after}
+                        </>
+                      );
+                    })()}
                   </Text>
                   <Text style={[styles.fpc, { color: colors.text3, fontFamily: font.dm }]}>
                     {postsLabel(posts.length)}
@@ -347,19 +419,27 @@ export default function FeedScreen() {
                           style={[
                             styles.upvote,
                             voted && {
-                              backgroundColor: scheme === 'dark' ? 'rgba(212,255,63,0.15)' : 'rgba(90,122,0,0.12)',
-                              borderColor: scheme === 'dark' ? 'rgba(212,255,63,0.4)' : 'rgba(90,122,0,0.35)',
+                              backgroundColor: scheme === 'dark' ? 'rgba(212,255,63,0.18)' : 'rgba(212,255,63,0.96)',
+                              borderColor: scheme === 'dark' ? 'rgba(212,255,63,0.45)' : '#8EAF16',
                               borderWidth: 1,
                             },
                           ]}
                         >
-                          <Text style={[styles.fuArrow, { color: voted ? colors.accent : 'rgba(255,255,255,0.5)' }]}>
+                          <Text
+                            style={[
+                              styles.fuArrow,
+                              { color: voted ? (scheme === 'light' ? '#253100' : colors.accent) : 'rgba(255,255,255,0.5)' },
+                            ]}
+                          >
                             ▲
                           </Text>
                           <Text
                             style={[
                               styles.fuCount,
-                              { color: voted ? colors.accent : 'rgba(255,255,255,0.5)', fontFamily: font.syne },
+                              {
+                                color: voted ? (scheme === 'light' ? '#253100' : colors.accent) : 'rgba(255,255,255,0.5)',
+                                fontFamily: font.syne,
+                              },
                             ]}
                           >
                             {c.vote_count}
@@ -561,7 +641,6 @@ const styles = StyleSheet.create({
   fuCount: { fontSize: 10, fontWeight: '700' },
   fco: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 9, paddingTop: 12, paddingBottom: 8 },
   fcu: { fontSize: 11, fontWeight: '700', color: '#fff' },
-  empty: { paddingHorizontal: 18, paddingVertical: 16, fontSize: 13 },
   campusEmptyCenter: { justifyContent: 'center', paddingHorizontal: 0, width: '100%' },
   emptyHero: {
     paddingHorizontal: 22,

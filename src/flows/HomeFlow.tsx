@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { challengeTag } from '../challenge';
+import { challengeTag, splitChallengeTitle } from '../challenge';
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/AppThemeContext';
 import { ChallengeDropOverlay } from '../components/ChallengeDropOverlay';
@@ -151,8 +151,16 @@ export function HomeFlow() {
                   {challengeTag(challenge)}
                 </Text>
                 <Text style={[styles.challengeTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
-                  find your favorite <Text style={{ color: colors.accent, fontStyle: 'normal' }}>bathroom</Text> on{' '}
-                  <Text style={{ color: colors.accent, fontStyle: 'normal' }}>campus</Text>
+                  {(() => {
+                    const { before, after } = splitChallengeTitle(challenge);
+                    return (
+                      <>
+                        {before}
+                        <Text style={{ color: colors.accent, fontStyle: 'normal' }}>{challenge.emphasis}</Text>
+                        {after}
+                      </>
+                    );
+                  })()}
                 </Text>
               </>
             ) : (

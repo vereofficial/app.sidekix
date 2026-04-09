@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -21,6 +21,7 @@ import { usePostsForChallenge } from '../../src/hooks/usePostsForChallenge';
 import { usePastChallenges } from '../../src/hooks/usePastChallenges';
 import { useTodayChallenge } from '../../src/hooks/useTodayChallenge';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
+import { SidekixTabState } from '../../src/components/SidekixTabState';
 import { Wordmark } from '../../src/components/Wordmark';
 import { upvotesLabel } from '../../src/lib/formatCount';
 import { tryGetSupabase } from '../../src/lib/supabase';
@@ -32,6 +33,24 @@ function formatTimeLeftMs(ms: number): string {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   return `${h}h ${m}m left`;
+}
+
+function parseLocalYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split('-').map((n) => parseInt(n, 10));
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+/** e.g. "yesterday", "3 days ago", "Jan 5" — for past challenge rows. */
+function formatRelativePastDay(dayYmd: string): string {
+  const then = parseLocalYmd(dayYmd);
+  then.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today.getTime() - then.getTime()) / 86400000);
+  if (diffDays <= 0) return 'today';
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 export default function TodayScreen() {
@@ -50,13 +69,30 @@ export default function TodayScreen() {
     undefined,
     !chLoad,
   );
-  const { posts: myPosts, loading: myLoad } = useMyPosts(user?.id);
+  const { posts: myPosts, loading: myLoad, refresh: refMyPosts } = useMyPosts(user?.id);
   const { pastChallenges, refresh: refPast } = usePastChallenges();
+  useFocusEffect(
+    useCallback(() => {
+      void Promise.all([refCh(), refCount(), refRecent(), refPast(), refMyPosts()]);
+    }, [refCh, refCount, refRecent, refPast, refMyPosts]),
+  );
+
   const [tick, setTick] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [stripNames, setStripNames] = useState<Record<string, string>>({});
+  const [didHydrateMyPosts, setDidHydrateMyPosts] = useState(false);
+  const [pastPostCounts, setPastPostCounts] = useState<Record<string, number>>({});
+  /** Avoid full-screen spinner on every tab focus refetch when today has no challenge (refCh sets loading=true). */
+  const challengeFetchCompletedOnceRef = useRef(false);
+  const [challengeRetryPending, setChallengeRetryPending] = useState(false);
 
-  const onCampus = 'campus';
+  useEffect(() => {
+    if (!chLoad) challengeFetchCompletedOnceRef.current = true;
+  }, [chLoad]);
+
+  useEffect(() => {
+    if (!chLoad && challengeRetryPending) setChallengeRetryPending(false);
+  }, [chLoad, challengeRetryPending]);
 
   const msLeft = useMemo(() => {
     const e = new Date();
@@ -69,8 +105,29 @@ export default function TodayScreen() {
     return () => clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    if (user?.id) setDidHydrateMyPosts(false);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setDidHydrateMyPosts(true);
+      return;
+    }
+    if (!myLoad) setDidHydrateMyPosts(true);
+  }, [user?.id, myLoad]);
+
   const completedPastIds = useMemo(() => {
     return new Set(myPosts.map((p) => p.challenge_id));
+  }, [myPosts]);
+
+  /** Newest post per challenge (feed order is created_at desc). */
+  const myPostByChallengeId = useMemo(() => {
+    const m = new Map<string, PostRow>();
+    for (const p of myPosts) {
+      if (!m.has(p.challenge_id)) m.set(p.challenge_id, p);
+    }
+    return m;
   }, [myPosts]);
 
   const postedToday = useMemo(() => {
@@ -84,6 +141,7 @@ export default function TodayScreen() {
   }, [challenge, myPosts]);
 
   const firstPosterOnly = Boolean(postedToday && postCount === 1 && myPostToday);
+  const canUploadToday = Boolean(challenge && !postedToday);
   const campusHasPostsOthers = !postedToday && postCount > 0;
   const emptyCampus = !postedToday && postCount === 0;
 
@@ -127,25 +185,44 @@ export default function TodayScreen() {
     return `${postCount} people have posted so far.`;
   }, [postCount]);
 
-  const sublinePostedMulti = useMemo(() => {
-    if (postCount <= 1) return '';
-    if (postCount < 10) {
-      return 'Others are posting too — see how it plays out on the feed.';
-    }
+  const postedSubline = useMemo(() => {
+    if (postCount <= 1) return "you're first on campus today.";
+    if (postCount < 10) return 'Others are posting too — see how it plays out on the feed.';
     const others = postCount - 1;
     return `${others} other ${others === 1 ? 'person has' : 'people have'} posted today too.`;
   }, [postCount]);
 
   const showRecentSection = postCount > 0 && !firstPosterOnly && !campusHasPostsOthers;
-  /** Past calendar challenges the user actually posted to; max 2 on Today. */
-  const pastRowsToShow = useMemo(() => {
-    return pastChallenges.filter((c) => completedPastIds.has(c.id)).slice(0, 2);
-  }, [pastChallenges, completedPastIds]);
+  /** Recent calendar challenges before today; status = user posted or not. */
+  const pastRowsToShow = useMemo(() => pastChallenges.slice(0, 8), [pastChallenges]);
   const showPastSection = pastRowsToShow.length > 0;
+
+  useEffect(() => {
+    const ids = pastRowsToShow.map((c) => c.id);
+    if (ids.length === 0) {
+      setPastPostCounts({});
+      return;
+    }
+    const sb = tryGetSupabase();
+    if (!sb) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await sb.from('posts').select('challenge_id').in('challenge_id', ids);
+      if (cancelled) return;
+      const m: Record<string, number> = {};
+      (data ?? []).forEach((row: { challenge_id: string }) => {
+        m[row.challenge_id] = (m[row.challenge_id] ?? 0) + 1;
+      });
+      setPastPostCounts(m);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pastRowsToShow]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refCh(), refCount(), refRecent(), refPast()]);
+    await Promise.all([refCh(), refCount(), refRecent(), refPast(), refMyPosts()]);
     setRefreshing(false);
   };
 
@@ -202,23 +279,46 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {chLoad ? (
+        {/** Challenge spinner: first load + explicit try again — not on background refetch when empty (tab focus). */}
+        {(chLoad &&
+          (chErr != null || !challenge) &&
+          (!challengeFetchCompletedOnceRef.current || challengeRetryPending)) ||
+        (Boolean(challenge) && chErr == null && Boolean(user?.id) && !didHydrateMyPosts) ? (
           <ActivityIndicator color={colors.accent} style={{ marginTop: 28 }} />
         ) : chErr ? (
-          <Text style={{ color: colors.text2, fontFamily: font.dm, paddingHorizontal: 18 }}>{chErr}</Text>
+          <SidekixTabState
+            variant="today"
+            reason="error"
+            colors={colors}
+            scheme={scheme}
+            minHeight={Math.max(380, winH - insets.top - 120)}
+            onRetry={() => {
+              setChallengeRetryPending(true);
+              void refCh();
+            }}
+          />
         ) : !challenge ? (
-          <Text style={[styles.challengeTitle, { color: colors.text1, fontFamily: font.syneExtra, paddingHorizontal: 18 }]}>
-            No sidequest for today
-          </Text>
-        ) : user && myLoad ? (
-          <ActivityIndicator color={colors.accent} style={{ marginTop: 32 }} />
-        ) : firstPosterOnly && myPostToday ? (
+          <SidekixTabState
+            variant="today"
+            reason="no-challenge"
+            colors={colors}
+            scheme={scheme}
+            minHeight={Math.max(380, winH - insets.top - 120)}
+            onRetry={() => {
+              setChallengeRetryPending(true);
+              void refCh();
+            }}
+          />
+        ) : postedToday && myPostToday ? (
           <View style={{ paddingHorizontal: 18, paddingTop: 8 }}>
             {renderChallengeHeading(false)}
             <Text style={[styles.challengeSub, { color: colors.text2, fontFamily: font.dm, marginTop: 8 }]}>
-              you&apos;re first on campus today.
+              {postedSubline}
             </Text>
-            <View style={[styles.heroPostCard, { borderColor: colors.border2 }]}>
+            <Pressable
+              onPress={() => router.push('/sharecard')}
+              style={({ pressed }) => [styles.heroPostCard, { borderColor: colors.border2, opacity: pressed ? 0.95 : 1 }]}
+            >
               <View style={styles.heroPostMedia}>
                 <PostMediaTile post={myPostToday} style={StyleSheet.absoluteFillObject} borderRadius={16} />
                 <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={styles.heroFade} />
@@ -235,17 +335,11 @@ export default function TodayScreen() {
                     ▲ {upvotesLabel(myVotesOnPost)} so far
                   </Text>
                 </View>
+                <View style={styles.heroSharePill}>
+                  <Text style={[styles.heroSharePillText, { fontFamily: font.syne }]}>share ↗</Text>
+                </View>
               </View>
-            </View>
-            <View style={[styles.firstBox, { borderColor: colors.accent, backgroundColor: scheme === 'dark' ? '#141414' : colors.card }]}>
-              <Text style={{ fontSize: 22 }}>⚡</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.firstTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>you went first.</Text>
-                <Text style={[styles.firstSub, { color: colors.text2, fontFamily: font.dm }]}>
-                  everyone else is still out there. check back later to see their takes.
-                </Text>
-              </View>
-            </View>
+            </Pressable>
           </View>
         ) : (
           <View
@@ -263,34 +357,36 @@ export default function TodayScreen() {
                   <Text style={[styles.emptyTodayDeadline, { color: colors.text2, fontFamily: font.dm, marginTop: 14 }]}>
                     you have until midnight.
                   </Text>
-                  <Pressable
-                    onPress={() => router.push('/upload')}
-                    style={({ pressed }) => [
-                      styles.emptyTodayCta,
-                      { backgroundColor: colors.accent, opacity: pressed ? 0.92 : 1 },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.emptyTodayCtaText,
-                        { color: resolvedScheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne },
+                  {canUploadToday ? (
+                    <Pressable
+                      onPress={() => router.push('/upload')}
+                      style={({ pressed }) => [
+                        styles.emptyTodayCta,
+                        { backgroundColor: colors.accent, opacity: pressed ? 0.92 : 1 },
                       ]}
                     >
-                      post your take →
-                    </Text>
-                  </Pressable>
+                      <Text
+                        style={[
+                          styles.emptyTodayCtaText,
+                          { color: resolvedScheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne },
+                        ]}
+                      >
+                        post your take →
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               </View>
             ) : (
               <View style={styles.hero}>
                 {renderChallengeHeading(false)}
                 <Text style={[styles.challengeSub, { color: colors.text2, fontFamily: font.dm, marginTop: 8 }]}>
-                  {campusHasPostsOthers ? sublineCampus : postedToday ? sublinePostedMulti || sublineCampus : sublineCampus}
+                  {sublineCampus}
                 </Text>
               </View>
             )}
 
-            {!emptyCampus && campusHasPostsOthers ? (
+            {!emptyCampus && campusHasPostsOthers && canUploadToday ? (
               <Pressable
                 onPress={() => router.push('/upload')}
                 style={({ pressed }) => [
@@ -308,20 +404,6 @@ export default function TodayScreen() {
               </Pressable>
             ) : null}
 
-            {!emptyCampus && postedToday && !firstPosterOnly ? (
-              <View
-                style={[
-                  styles.submitZoneDone,
-                  { borderColor: colors.border2, backgroundColor: scheme === 'dark' ? colors.bg3 : colors.card },
-                ]}
-              >
-                <Text style={{ fontSize: 22 }}>✓</Text>
-                <Text style={[styles.szTitle, { color: colors.text1, fontFamily: font.syne }]}>posted today</Text>
-                <Text style={[styles.szSub, { color: colors.text3, fontFamily: font.dm }]}>
-                  one take per sidequest — check the feed for reactions
-                </Text>
-              </View>
-            ) : null}
           </View>
         )}
 
@@ -352,20 +434,23 @@ export default function TodayScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.text3, fontFamily: font.syne }]}>
                   {postCount < 10 ? 'Campus so far' : 'Recent submissions'}
                 </Text>
-                {postCount > 0 && postCount < 10 ? (
-                  <Text style={[styles.sectionHint, { color: colors.text2, fontFamily: font.dm }]}>
-                    {postCount < 3 ? 'early campus energy' : 'still room to stand out'}
-                  </Text>
-                ) : null}
               </View>
             </View>
             {recLoad ? (
               <ActivityIndicator color={colors.accent} style={{ marginVertical: 20 }} />
             ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[styles.strip, !showPastSection && styles.stripExpanded]}
+              >
                 {recent.map((p) => (
-                  <View key={p.id} style={styles.pc}>
-                    <PostMediaTile post={p} style={{ width: 72, height: 72 }} borderRadius={10} />
+                  <View key={p.id} style={[styles.pc, !showPastSection && styles.pcExpanded]}>
+                    <PostMediaTile
+                      post={p}
+                      style={!showPastSection ? { width: 104, height: 104 } : { width: 72, height: 72 }}
+                      borderRadius={!showPastSection ? 12 : 10}
+                    />
                     <View style={styles.pvWrap}>
                       <Text style={[styles.pv, { color: colors.accent, fontFamily: font.syne }]}>▲ {p.vote_count}</Text>
                     </View>
@@ -379,19 +464,72 @@ export default function TodayScreen() {
         {showPastSection ? (
           <>
             <View style={[styles.sectionRow, { marginTop: 6 }]}>
-              <Text style={[styles.sectionTitle, { color: colors.text3, fontFamily: font.syne }]}>Past sidequests</Text>
-            </View>
-            {pastRowsToShow.map((c) => (
-              <View
-                key={c.id}
-                style={[styles.past, { backgroundColor: colors.card, borderColor: colors.border }]}
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  { color: scheme === 'light' ? '#A0A0A0' : colors.text3, fontFamily: font.syne },
+                ]}
               >
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.pastTitle, { color: colors.text1, fontFamily: font.syne }]}>{c.title}</Text>
-                  <Text style={[styles.pastMeta, { color: colors.text3, fontFamily: font.dm }]}>{c.day}</Text>
+                Past sidequests
+              </Text>
+            </View>
+            {pastRowsToShow.map((c) => {
+              const done = completedPastIds.has(c.id);
+              const n = pastPostCounts[c.id] ?? 0;
+              const myPost = myPostByChallengeId.get(c.id);
+              return (
+                <View
+                  key={c.id}
+                  style={[styles.pastCard, { backgroundColor: colors.card, borderColor: colors.border2 }]}
+                >
+                  {myPost ? (
+                    <Pressable
+                      onPress={() => router.push(`/submission/${myPost.id}`)}
+                      style={({ pressed }) => [styles.pastThumbWrap, { opacity: pressed ? 0.92 : 1 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel="View your submission"
+                    >
+                      <PostMediaTile
+                        post={myPost}
+                        style={styles.pastThumbFill}
+                        borderRadius={14}
+                        compact
+                      />
+                    </Pressable>
+                  ) : (
+                    <View
+                      style={[
+                        styles.pastThumbPlaceholder,
+                        { borderColor: colors.border2, backgroundColor: colors.bg3 },
+                      ]}
+                    >
+                      <Text style={{ color: colors.text3, fontFamily: font.syne, fontSize: 14 }}>—</Text>
+                    </View>
+                  )}
+                  <View style={styles.pastTextCol}>
+                    <Text style={[styles.pastCardTitle, { color: colors.text1 }]}>{c.title.toLowerCase()}</Text>
+                    <Text
+                      style={[
+                        styles.pastCardMeta,
+                        { color: scheme === 'light' ? '#A0A0A0' : colors.text3, fontFamily: font.dm },
+                      ]}
+                    >
+                      {formatRelativePastDay(c.day)} · {n.toLocaleString('en-US')}{' '}
+                      {n === 1 ? 'post' : 'posts'}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.pastStatus,
+                      { color: done ? colors.accent : scheme === 'light' ? '#A0A0A0' : colors.text3, fontFamily: font.syne },
+                    ]}
+                    accessibilityLabel={done ? 'Completed' : 'Not completed'}
+                  >
+                    {done ? '✓' : '✕'}
+                  </Text>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </>
         ) : null}
       </ScrollView>
@@ -434,17 +572,16 @@ const styles = StyleSheet.create({
   heroCaptionBlock: { position: 'absolute', left: 12, right: 12, bottom: 12 },
   heroCaption: { fontSize: 14, lineHeight: 19 },
   heroVotes: { fontSize: 12, fontWeight: '700', marginTop: 6 },
-  firstBox: {
-    marginTop: 16,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
+  heroSharePill: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
   },
-  firstTitle: { fontSize: 16, letterSpacing: -0.2 },
-  firstSub: { fontSize: 12, lineHeight: 17, marginTop: 4 },
+  heroSharePillText: { fontSize: 11, color: '#fff', fontWeight: '800' },
   emptyTodayWrap: {
     marginTop: 4,
     paddingHorizontal: 22,
@@ -489,17 +626,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
   },
-  submitZoneDone: {
-    marginHorizontal: 18,
-    marginTop: 14,
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 22,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
   szTitle: { fontSize: 13, fontWeight: '700' },
   szSub: { fontSize: 11 },
   sectionRow: {
@@ -511,10 +637,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sectionTitle: { fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase' },
-  sectionHint: { fontSize: 11, lineHeight: 15, marginTop: 4 },
   strip: { paddingHorizontal: 18, gap: 7, flexDirection: 'row' },
+  stripExpanded: { gap: 10, paddingBottom: 6 },
   stripTall: { paddingHorizontal: 18, gap: 10, flexDirection: 'row', paddingBottom: 4 },
   pc: { width: 72, height: 72, position: 'relative' },
+  pcExpanded: { width: 104, height: 104 },
   pcTall: { width: 120 },
   stripHandle: { fontSize: 11, marginTop: 6, textAlign: 'center' },
   pvWrap: {
@@ -527,16 +654,41 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   pv: { fontSize: 9, fontWeight: '700' },
-  past: {
+  pastCard: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 18,
-    marginBottom: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    marginBottom: 10,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 12,
   },
-  pastTitle: { fontSize: 12, fontWeight: '700' },
-  pastMeta: { fontSize: 10, marginTop: 1 },
+  pastThumbWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  pastThumbFill: { width: 52, height: 52 },
+  pastThumbPlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  /** Full wrap, no line clamp — matches PAST SIDEQUESTS mock (Syne bold, not Extra). */
+  pastTextCol: { flex: 1, minWidth: 0, justifyContent: 'center', flexShrink: 1 },
+  pastCardTitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    letterSpacing: -0.2,
+    fontFamily: font.syne,
+    fontWeight: '700',
+  },
+  pastCardMeta: { fontSize: 12, lineHeight: 17, marginTop: 5, textTransform: 'lowercase' },
+  pastStatus: { fontSize: 15, width: 24, textAlign: 'center', fontWeight: '700' },
 });

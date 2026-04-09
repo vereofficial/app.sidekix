@@ -46,9 +46,11 @@ export default function LeadScreen() {
   };
 
   const userOnBoard = Boolean(user?.id && rows.some((r) => r.user_id === user.id));
-  const totalSlots = 5;
+  /** Week view: at least 5 slots; once there are 5+ competitors, show 10 slots total. All-time: real rows only. */
+  const totalSlots =
+    scope === 'week' ? (rows.length >= 5 ? 10 : Math.max(5, rows.length)) : rows.length;
   const openSlots = Math.max(0, totalSlots - rows.length);
-  const slotOpacity = [1, 0.45, 0.3, 0.2, 0.12];
+  const openSlotOpacity = (openIndex: number) => Math.max(0.07, 0.44 - openIndex * 0.038);
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
@@ -197,7 +199,7 @@ export default function LeadScreen() {
                     {
                       borderColor: scheme === 'dark' ? '#2c2c2c' : colors.border2,
                       backgroundColor: scheme === 'dark' ? '#121212' : colors.card,
-                      opacity: slotOpacity[Math.min(rank - 1, slotOpacity.length - 1)],
+                      opacity: openSlotOpacity(i),
                     },
                   ]}
                 >

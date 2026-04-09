@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { splitChallengeTitle } from '../challenge';
 import type { ChallengeRow } from '../types/database';
 import { hapticChallengeDropBurst, hapticLight } from '../lib/haptics';
 import { font, getColors } from '../theme';
@@ -182,10 +183,16 @@ export function ChallengeDropOverlay({
             ]}
           >
             {challenge ? (
-              <>
-                find your favorite <Text style={{ color: colors.accent, fontStyle: 'normal' }}>bathroom</Text> on{' '}
-                <Text style={{ color: colors.accent, fontStyle: 'normal' }}>campus</Text>
-              </>
+              (() => {
+                const { before, after } = splitChallengeTitle(challenge);
+                return (
+                  <>
+                    {before}
+                    <Text style={{ color: colors.accent, fontStyle: 'normal' }}>{challenge.emphasis}</Text>
+                    {after}
+                  </>
+                );
+              })()
             ) : (
               "today's sidequest"
             )}

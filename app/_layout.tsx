@@ -15,11 +15,12 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { AppThemeProvider, useAppTheme } from '../src/context/AppThemeContext';
 import { useStoreRatingPrompt } from '../src/hooks/useStoreRatingPrompt';
+import { initNotificationHandler, scheduleSidequestDropReminder } from '../src/lib/notifications';
 import { font, getColors } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -29,6 +30,16 @@ function NavigationShell() {
   const colors = getColors(resolvedScheme);
   const { session } = useAuth();
   const { visible: rateVisible, onRate, onNotNow } = useStoreRatingPrompt(Boolean(session));
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    void initNotificationHandler();
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !session) return;
+    void scheduleSidequestDropReminder();
+  }, [session]);
   const nav = resolvedScheme === 'dark' ? DarkTheme : DefaultTheme;
   const merged = {
     ...nav,

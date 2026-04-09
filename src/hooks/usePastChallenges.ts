@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ChallengeRow } from '../types/database';
+import { localCalendarYmd } from '../lib/calendarDate';
 import { tryGetSupabase } from '../lib/supabase';
-
-function utcToday(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export function usePastChallenges() {
   const [rows, setRows] = useState<ChallengeRow[]>([]);
@@ -18,7 +15,7 @@ export function usePastChallenges() {
       return;
     }
     setLoading(true);
-    const day = utcToday();
+    const day = localCalendarYmd();
     const { data } = await sb
       .from('challenges')
       .select('*')

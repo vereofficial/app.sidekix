@@ -23,6 +23,7 @@ import { useAppTheme, type ThemePreference } from '../../src/context/AppThemeCon
 import { useMyPosts } from '../../src/hooks/useMyPosts';
 import { useReadableStorageUrl } from '../../src/hooks/useReadableStorageUrl';
 import { readLocalUriAsArrayBuffer } from '../../src/lib/readLocalMediaForUpload';
+import { localCalendarYmd } from '../../src/lib/calendarDate';
 import { tryGetSupabase } from '../../src/lib/supabase';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
 import { statSidequestsKey, statUpvotesKey } from '../../src/lib/formatCount';
@@ -110,7 +111,7 @@ export default function ProfileScreen() {
         const d = new Date();
         let run = 0;
         while (run < 365) {
-          const day = d.toISOString().slice(0, 10);
+          const day = localCalendarYmd(d);
           if (!daySet.has(day)) break;
           run += 1;
           d.setDate(d.getDate() - 1);
@@ -490,7 +491,7 @@ const styles = StyleSheet.create({
   },
   empty: { paddingHorizontal: 18, paddingVertical: 12, fontSize: 13 },
   submissionsEmptyFlex: { justifyContent: 'center', paddingHorizontal: 22 },
-  submissionsEmptyInner: { alignItems: 'center', paddingVertical: 12 },
+  submissionsEmptyInner: { alignItems: 'center', paddingVertical: 12, marginTop: -24 },
   submissionsEmptyTitle: { fontSize: 17, marginBottom: 8, letterSpacing: -0.2, textAlign: 'center' },
   submissionsEmptySub: { fontSize: 13, lineHeight: 20, marginBottom: 14, textAlign: 'center' },
   submissionsEmptyCta: { fontSize: 13, letterSpacing: 0.4, fontWeight: '700', textAlign: 'center' },

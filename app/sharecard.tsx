@@ -112,8 +112,7 @@ export default function ShareCardScreen() {
           Top 10 can share their rank card. Only #1 wins the prize.
         </Text>
         <Text style={[styles.hint, { color: colors.text3, fontFamily: font.dm }]}>
-          Pick a format, then share — Instagram, Messages, TikTok, anywhere. Rich link previews for texts need a web
-          page (add later).
+          Pick a format, then share — Instagram, Messages, TikTok, anywhere.
         </Text>
 
         <View style={[styles.tabs, { backgroundColor: colors.pillBg }]}>

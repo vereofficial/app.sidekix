@@ -3,7 +3,7 @@ import { Alert, Platform, Share } from 'react-native';
 import { postShareUrl } from '../constants/shareLinks';
 import { hapticLight } from './haptics';
 
-/** Opens the system share sheet with the public post URL (rich preview once the web page exists). */
+/** Opens the system share sheet with the public post URL. */
 export async function sharePostLink(postId: string): Promise<void> {
   const url = postShareUrl(postId);
   try {
@@ -20,7 +20,7 @@ export async function copyPostLink(postId: string): Promise<void> {
   try {
     hapticLight();
     await Clipboard.setStringAsync(url);
-    Alert.alert('Copied', 'Share link copied. Paste in Messages for a preview once the page is live.');
+    Alert.alert('Copied', 'Link copied to clipboard.');
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Could not copy';
     Alert.alert('Copy', msg);
