@@ -55,6 +55,7 @@ function NavigationShell() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="upload" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="sharecard" />
+          <Stack.Screen name="p/[id]" />
         </Stack>
       </NavThemeProvider>
       <Modal visible={rateVisible} transparent animationType="fade">
