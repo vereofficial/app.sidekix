@@ -2,7 +2,7 @@
   "expo": {
     "name": "sidekix",
     "slug": "sidekix",
-    "version": "1.0.0",
+    "version": "2.6",
     "orientation": "portrait",
     "icon": "./assets/app-icon-light.png",
     "userInterfaceStyle": "automatic",
@@ -19,6 +19,9 @@
       "icon": {
         "light": "./assets/app-icon-light.png",
         "dark": "./assets/app-icon-dark.png"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -36,6 +39,12 @@
     "plugins": [
       "expo-router",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b24544a7-290a-4248-b34e-e50df0e24568"
+      }
+    }
   }
 }
