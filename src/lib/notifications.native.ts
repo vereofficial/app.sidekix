@@ -58,14 +58,14 @@ export async function scheduleSidequestDropReminder() {
   });
 }
 
-/** Fire a one-off local notification when crossing an upvote threshold (call from app after refresh). */
-export async function notifyUpvoteMilestone(total: number, milestone: number) {
+/** Fire a one-off local notification when crossing a reaction-count threshold (call from app after refresh). */
+export async function notifyReactionMilestone(total: number, milestone: number) {
   if (Platform.OS === 'web') return;
   if (total < milestone) return;
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Upvotes',
-      body: `Your post hit ${milestone} upvotes.`,
+      title: 'Reactions',
+      body: `Your post hit ${milestone} reactions.`,
     },
     trigger: null,
   });

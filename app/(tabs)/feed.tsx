@@ -54,7 +54,7 @@ export default function FeedScreen() {
     challenge?.id ?? null,
     undefined,
     user?.id,
-    !chLoad,
+    Boolean(challenge?.id),
   );
   const { followingIds, refresh: refFollows } = useFollows();
   const postedToday = usePostedToday(user?.id);
@@ -417,7 +417,7 @@ export default function FeedScreen() {
                         <Pressable
                           onPress={() => onVote(c.id, voted)}
                           style={[
-                            styles.upvote,
+                            styles.reactionBtn,
                             voted && {
                               backgroundColor: scheme === 'dark' ? 'rgba(212,255,63,0.18)' : 'rgba(212,255,63,0.96)',
                               borderColor: scheme === 'dark' ? 'rgba(212,255,63,0.45)' : '#8EAF16',
@@ -461,7 +461,7 @@ export default function FeedScreen() {
                 <Text style={[styles.sparseFootText, { color: colors.text2, fontFamily: font.dm }]}>
                   {posts.length <= 1
                     ? postedToday
-                      ? 'Campus is still waking up — cheer people on with upvotes.'
+                      ? 'Campus is still waking up — cheer people on with reactions.'
                       : 'Campus is quiet — your post could set the tone today.'
                     : postedToday
                       ? 'Still early — hang out and vote for your favorites.'
@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   sharePillText: { fontSize: 12, color: '#fff', fontWeight: '800' },
-  upvote: {
+  reactionBtn: {
     position: 'absolute',
     top: 8,
     right: 8,

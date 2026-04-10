@@ -26,7 +26,7 @@ import { readLocalUriAsArrayBuffer } from '../../src/lib/readLocalMediaForUpload
 import { localCalendarYmd } from '../../src/lib/calendarDate';
 import { tryGetSupabase } from '../../src/lib/supabase';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
-import { statSidequestsKey, statUpvotesKey } from '../../src/lib/formatCount';
+import { statSidequestsKey, statReactionsKey } from '../../src/lib/formatCount';
 import { hapticLight } from '../../src/lib/haptics';
 import { font, getColors } from '../../src/theme';
 
@@ -49,7 +49,7 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [avatarMime, setAvatarMime] = useState<string | null>(null);
-  const [stats, setStats] = useState({ sidequests: 0, upvotes: 0, won: 0, streak: 0 });
+  const [stats, setStats] = useState({ sidequests: 0, reactions: 0, won: 0, streak: 0 });
 
   useEffect(() => {
     setDraft(profile?.username ?? '');
@@ -63,12 +63,12 @@ export default function ProfileScreen() {
     const loadStats = async () => {
       const sb = tryGetSupabase();
       if (!sb || !user?.id) {
-        setStats({ sidequests: 0, upvotes: 0, won: 0, streak: 0 });
+        setStats({ sidequests: 0, reactions: 0, won: 0, streak: 0 });
         return;
       }
       const challengeIds = [...new Set(posts.map((p) => p.challenge_id))];
       const sidequests = challengeIds.length;
-      let upvotes = 0;
+      let reactions = 0;
       let won = 0;
       let streak = 0;
 
@@ -77,7 +77,7 @@ export default function ProfileScreen() {
           'post_id',
           posts.map((p) => p.id),
         );
-        upvotes = (myVotes ?? []).length;
+        reactions = (myVotes ?? []).length;
       }
 
       if (challengeIds.length > 0) {
@@ -118,7 +118,7 @@ export default function ProfileScreen() {
         }
         streak = run;
       }
-      setStats({ sidequests, upvotes, won, streak });
+      setStats({ sidequests, reactions, won, streak });
     };
     void loadStats();
   }, [posts, user?.id]);
@@ -227,10 +227,10 @@ export default function ProfileScreen() {
             </View>
             <View style={[styles.statCell, { borderRightWidth: 1, borderRightColor: colors.border2 }]}>
               <Text style={[styles.statValue, { color: colors.accent, fontFamily: font.syneExtra }]}>
-                {stats.upvotes.toLocaleString()}
+                {stats.reactions.toLocaleString()}
               </Text>
               <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>
-                {statUpvotesKey(stats.upvotes)}
+                {statReactionsKey(stats.reactions)}
               </Text>
             </View>
             <View style={styles.statCell}>

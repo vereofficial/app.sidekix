@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PostRow } from '../types/database';
 import { tryGetSupabase } from '../lib/supabase';
 
@@ -8,28 +8,33 @@ export function usePostsForChallenge(
   challengeId: string | null,
   limit?: number,
   voterId?: string | null,
+  /** When false, skip fetch (e.g. parent still resolving). Does not clear existing rows. */
   challengeReady = true,
 ) {
   const [posts, setPosts] = useState<PostWithVotes[]>([]);
   const [myVoteIds, setMyVoteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Avoid clearing the list / toggling loading when the same challenge is refetched (tab focus, pull). */
+  const lastOkChallengeId = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     const sb = tryGetSupabase();
-    if (!challengeReady) {
-      setPosts([]);
-      setMyVoteIds(new Set());
-      setLoading(true);
-      return;
-    }
     if (!sb || !challengeId) {
       setPosts([]);
       setMyVoteIds(new Set());
       setLoading(false);
+      lastOkChallengeId.current = null;
       return;
     }
-    setLoading(true);
+    if (!challengeReady) {
+      return;
+    }
+
+    const sameChallengeRefetch = lastOkChallengeId.current === challengeId;
+    if (!sameChallengeRefetch) {
+      setLoading(true);
+    }
     setError(null);
     let q = sb.from('posts').select('*').eq('challenge_id', challengeId).order('created_at', { ascending: false });
     if (limit) q = q.limit(limit);
@@ -46,6 +51,7 @@ export function usePostsForChallenge(
       setPosts([]);
       setMyVoteIds(new Set());
       setLoading(false);
+      lastOkChallengeId.current = challengeId;
       return;
     }
     const ids = list.map((p) => p.id);
@@ -68,10 +74,15 @@ export function usePostsForChallenge(
       })),
     );
     setLoading(false);
+    lastOkChallengeId.current = challengeId;
   }, [challengeId, limit, voterId, challengeReady]);
 
   useEffect(() => {
-    refresh();
+    lastOkChallengeId.current = null;
+  }, [challengeId]);
+
+  useEffect(() => {
+    void refresh();
   }, [refresh]);
 
   return { posts, myVoteIds, loading, error, refresh };

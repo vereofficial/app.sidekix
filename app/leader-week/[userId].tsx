@@ -93,7 +93,7 @@ export default function LeaderWeekUserScreen() {
         <View style={{ width: 24 }} />
       </View>
       <Text style={[styles.sub, { color: colors.text3, fontFamily: font.dm }]}>
-        this week · you can only upvote today&apos;s post{!isSelf ? '' : ' (others can on yours)'}
+        this week · you can only react to today&apos;s post{!isSelf ? '' : ' (others can on yours)'}
       </Text>
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 28 }} />
@@ -159,7 +159,7 @@ export default function LeaderWeekUserScreen() {
                         ]}
                       >
                         <Text style={{ fontSize: 12, color: voted ? colors.accent : colors.text2, fontFamily: font.syne }}>
-                          {voted ? '▲ voted' : '▲ upvote'}
+                          {voted ? '▲ voted' : '▲ react'}
                         </Text>
                       </Pressable>
                     ) : p.is_today_challenge && user?.id === p.user_id ? (

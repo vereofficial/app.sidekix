@@ -16,7 +16,7 @@ import { useAppTheme } from '../../src/context/AppThemeContext';
 import { useLeaderboard } from '../../src/hooks/useLeaderboard';
 import { usePostedToday } from '../../src/hooks/usePostedToday';
 import { mondayToSundayWeekProgress } from '../../src/lib/weekTimeline';
-import { upvotesLabel } from '../../src/lib/formatCount';
+import { reactionsLabel } from '../../src/lib/formatCount';
 import { font, getColors } from '../../src/theme';
 
 const WEEKDAY_PAREN = ['sun', 'mon', 'tues', 'wed', 'thurs', 'fri', 'sat'] as const;
@@ -64,7 +64,7 @@ export default function LeadScreen() {
             {scope === 'week' ? 'This Week' : 'All time'}
           </Text>
           <Text style={[styles.leadSub, { color: colors.text3, fontFamily: font.dm }]}>
-            {scope === 'week' ? 'Mon — Sun · tap a row to see their week' : 'All-time upvote totals'}
+            {scope === 'week' ? 'Mon — Sun · tap a row to see their week' : 'All-time reaction totals'}
           </Text>
         </View>
         <View
@@ -81,7 +81,7 @@ export default function LeadScreen() {
             <Text style={[styles.fpLabel, { color: colors.accent, fontFamily: font.syne }]}>1st place prize</Text>
             <Text style={[styles.fpValue, { color: colors.text1, fontFamily: font.syneExtra }]}>$20 gift card</Text>
             <Text style={[styles.fpSponsor, { color: colors.text3, fontFamily: font.dm }]}>
-              most upvotes by sunday midnight wins
+              most reactions by sunday midnight wins
             </Text>
             <View style={styles.prizeTrack}>
               <View
@@ -162,7 +162,7 @@ export default function LeadScreen() {
                       @{row.username}
                     </Text>
                     <Text numberOfLines={1} style={{ color: colors.text3, fontFamily: font.dm, fontSize: 12, marginTop: 2 }}>
-                      {scope === 'week' ? `${upvotesLabel(row.vote_total)} this week` : upvotesLabel(row.vote_total)}
+                      {scope === 'week' ? `${reactionsLabel(row.vote_total)} this week` : reactionsLabel(row.vote_total)}
                     </Text>
                   </View>
                   <View
@@ -229,7 +229,7 @@ export default function LeadScreen() {
               <View style={[styles.yourSlot, { borderColor: colors.border2, backgroundColor: colors.card }]}>
                 <Text style={[styles.yourSlotTitle, { color: colors.text1, fontFamily: font.syne }]}>you · posted today</Text>
                 <Text style={[styles.yourSlotSub, { color: colors.text3, fontFamily: font.dm }]}>
-                  earn upvotes on the feed to climb the board
+                  earn reactions on the feed to climb the board
                 </Text>
               </View>
             ) : null}

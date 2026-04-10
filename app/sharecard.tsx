@@ -19,7 +19,7 @@ import { useAppTheme } from '../src/context/AppThemeContext';
 import { useAuth } from '../src/context/AuthContext';
 import { useLeaderboard } from '../src/hooks/useLeaderboard';
 import { useTodayChallenge } from '../src/hooks/useTodayChallenge';
-import { upvotesLabel } from '../src/lib/formatCount';
+import { reactionsLabel } from '../src/lib/formatCount';
 import { hapticLight } from '../src/lib/haptics';
 import { font, getColors } from '../src/theme';
 
@@ -137,7 +137,7 @@ export default function ShareCardScreen() {
 
         {you && rank ? (
           <Text style={[styles.meta, { color: colors.text2, fontFamily: font.dm }]}>
-            @{you.username} · #{rank} · ▲ {upvotesLabel(you.vote_total)}
+            @{you.username} · #{rank} · ▲ {reactionsLabel(you.vote_total)}
           </Text>
         ) : (
           <Text style={[styles.meta, { color: colors.text3, fontFamily: font.dm }]}>
@@ -174,7 +174,7 @@ export default function ShareCardScreen() {
                 {rank ? `#${rank} this week` : 'sidequest'}
               </Text>
               <Text style={[styles.cardVotes, { fontFamily: font.dm, color: '#D4FF3F' }]}>
-                {you ? `▲ ${upvotesLabel(you.vote_total)}` : '—'}
+                {you ? `▲ ${reactionsLabel(you.vote_total)}` : '—'}
               </Text>
               <Text style={[styles.cardChallenge, { fontFamily: font.dm }]}>
                 {challengeLine}

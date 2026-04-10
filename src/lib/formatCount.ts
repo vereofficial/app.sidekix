@@ -1,5 +1,5 @@
-export function upvotesLabel(n: number): string {
-  return `${n} ${n === 1 ? 'upvote' : 'upvotes'}`;
+export function reactionsLabel(n: number): string {
+  return `${n} ${n === 1 ? 'reaction' : 'reactions'}`;
 }
 
 export function postsLabel(n: number): string {
@@ -11,7 +11,6 @@ export function statSidequestsKey(n: number): string {
   return n === 1 ? 'SIDEQUEST' : 'SIDEQUESTS';
 }
 
-export function statUpvotesKey(n: number): string {
-  return n === 1 ? 'UPVOTE' : 'UPVOTES';
+export function statReactionsKey(n: number): string {
+  return n === 1 ? 'REACTION' : 'REACTIONS';
 }
-

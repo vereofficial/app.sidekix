@@ -179,13 +179,13 @@ body.light .fpd{background:#5a7a00}
 .fco{position:absolute;bottom:0;left:0;right:0;padding:22px 9px 8px;background:linear-gradient(transparent,rgba(0,0,0,.8));display:flex;justify-content:space-between;align-items:flex-end}
 .fcu{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#fff}
 .anon-label{color:#aaa}
-/* Feed upvote — sits top-right */
-.feed-upvote{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;align-items:center;gap:1px;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);border-radius:8px;padding:5px 7px;cursor:pointer;border:1px solid transparent;transition:all .15s}
-.feed-upvote:active{transform:scale(.93)}
-.feed-upvote.voted{background:rgba(212,255,63,.15);border-color:rgba(212,255,63,.4)}
+/* Feed reaction — sits top-right */
+.feed-reaction{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;align-items:center;gap:1px;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);border-radius:8px;padding:5px 7px;cursor:pointer;border:1px solid transparent;transition:all .15s}
+.feed-reaction:active{transform:scale(.93)}
+.feed-reaction.voted{background:rgba(212,255,63,.15);border-color:rgba(212,255,63,.4)}
 .fu-arrow{font-size:11px;color:rgba(255,255,255,.5);transition:color .15s}
 .fu-count{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;color:rgba(255,255,255,.5);transition:color .15s}
-.feed-upvote.voted .fu-arrow,.feed-upvote.voted .fu-count{color:#D4FF3F}
+.feed-reaction.voted .fu-arrow,.feed-reaction.voted .fu-count{color:#D4FF3F}
 .friends-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 28px;text-align:center;gap:10px}
 .fe-sub{font-size:12px;color:var(--text2);line-height:1.5}
 .fe-btn{background:var(--accent);color:#0a0a0a;font-family:'Syne',sans-serif;font-size:12px;font-weight:800;border-radius:20px;padding:9px 20px;border:none;cursor:pointer;margin-top:4px}
@@ -259,13 +259,13 @@ body.light .rank-1 .rn{color:#5a7a00}
 .li-info{flex:1;min-width:0}
 .li-user{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .li-cap{font-size:11px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.upvote-btn{display:flex;flex-direction:column;align-items:center;gap:1px;background:var(--bg3);border-radius:9px;padding:6px 9px;cursor:pointer;transition:all .15s;flex-shrink:0;border:1px solid transparent}
-.upvote-btn:active{transform:scale(.93)}
-.upvote-btn.voted{background:#D4FF3F18;border-color:#D4FF3F44}
-.upvote-arrow{font-size:12px}
-.upvote-count{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--text3)}
-.upvote-btn.voted .upvote-count{color:var(--accent)}
-body.light .upvote-btn.voted .upvote-count{color:#5a7a00}
+.reaction-btn{display:flex;flex-direction:column;align-items:center;gap:1px;background:var(--bg3);border-radius:9px;padding:6px 9px;cursor:pointer;transition:all .15s;flex-shrink:0;border:1px solid transparent}
+.reaction-btn:active{transform:scale(.93)}
+.reaction-btn.voted{background:#D4FF3F18;border-color:#D4FF3F44}
+.reaction-arrow{font-size:12px}
+.reaction-count{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--text3)}
+.reaction-btn.voted .reaction-count{color:var(--accent)}
+body.light .reaction-btn.voted .reaction-count{color:#5a7a00}
 .share-rank-btn{display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:5px 8px;cursor:pointer;font-family:'Syne',sans-serif;font-size:9px;font-weight:700;color:var(--text2);flex-shrink:0;transition:all .15s}
 .share-rank-btn:hover{border-color:var(--accent);color:var(--accent)}
 body.light .share-rank-btn:hover{border-color:#5a7a00;color:#5a7a00}
@@ -551,37 +551,37 @@ body.light .ann-head{color:#5a7a00}
       <div class="feed-grid">
         <div class="feed-card" style="grid-row:span 2">
           <div class="fci img-4" style="aspect-ratio:2/3"></div>
-          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">214</div></div>
+          <div class="feed-reaction" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">214</div></div>
           <div class="fco"><div class="fcu">@maya</div></div>
         </div>
         <div class="feed-card">
           <div class="fci img-7" style="aspect-ratio:1"></div>
-          <div class="feed-upvote voted" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">97</div></div>
+          <div class="feed-reaction voted" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">97</div></div>
           <div class="fco"><div class="fcu anon-label">anon</div></div>
         </div>
         <div class="feed-card">
           <div class="fci img-1" style="aspect-ratio:1"></div>
-          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">63</div></div>
+          <div class="feed-reaction" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">63</div></div>
           <div class="fco"><div class="fcu">@priya</div></div>
         </div>
         <div class="feed-card">
           <div class="fci img-3" style="aspect-ratio:3/4"></div>
-          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">44</div></div>
+          <div class="feed-reaction" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">44</div></div>
           <div class="fco"><div class="fcu">@nico</div></div>
         </div>
         <div class="feed-card">
           <div class="fci img-9" style="aspect-ratio:3/4"></div>
-          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">38</div></div>
+          <div class="feed-reaction" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">38</div></div>
           <div class="fco"><div class="fcu anon-label">anon</div></div>
         </div>
         <div class="feed-card">
           <div class="fci img-6" style="aspect-ratio:3/4"></div>
-          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">22</div></div>
+          <div class="feed-reaction" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">22</div></div>
           <div class="fco"><div class="fcu">@seb</div></div>
         </div>
         <div class="feed-card">
           <div class="fci img-2" style="aspect-ratio:3/4"></div>
-          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">19</div></div>
+          <div class="feed-reaction" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">19</div></div>
           <div class="fco"><div class="fcu">@lex</div></div>
         </div>
       </div>
@@ -598,17 +598,17 @@ body.light .ann-head{color:#5a7a00}
       <div class="feed-grid">
         <div class="feed-card" style="grid-row:span 2">
           <div class="fci img-8" style="aspect-ratio:2/3"></div>
-          <div class="feed-upvote voted" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">88</div></div>
+          <div class="feed-reaction voted" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">88</div></div>
           <div class="fco"><div class="fcu">@marina</div></div>
         </div>
         <div class="feed-card">
           <div class="fci img-5" style="aspect-ratio:1"></div>
-          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">54</div></div>
+          <div class="feed-reaction" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">54</div></div>
           <div class="fco"><div class="fcu">@jalen</div></div>
         </div>
         <div class="feed-card">
           <div class="fci img-2" style="aspect-ratio:1"></div>
-          <div class="feed-upvote" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">31</div></div>
+          <div class="feed-reaction" onclick="toggleFeedVote(this)"><div class="fu-arrow">▲</div><div class="fu-count">31</div></div>
           <div class="fco"><div class="fcu">@dana</div></div>
         </div>
       </div>
@@ -670,7 +670,7 @@ body.light .ann-head{color:#5a7a00}
         </div>
         <div class="ts" id="anon-ts" onclick="toggleAnon()"><div class="tk"></div></div>
       </div>
-      <div class="anon-note" id="anon-note" style="display:none">your post will appear as "anon" on the public feed. you still earn upvotes and can appear on the leaderboard.</div>
+      <div class="anon-note" id="anon-note" style="display:none">your post will appear as "anon" on the public feed. you still earn reactions and can appear on the leaderboard.</div>
       <button class="submit-btn">post it →</button>
       <div style="height:20px"></div>
     </div>
@@ -695,7 +695,7 @@ body.light .ann-head{color:#5a7a00}
         <div style="font-size:18px;cursor:pointer;color:var(--text1)" onclick="closeSubViewer()">←</div>
         <div>
           <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text1)" id="sv-username">@maya_k</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:1px" id="sv-rank-sub">#1 this week · 214 total upvotes</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px" id="sv-rank-sub">#1 this week · 214 total reactions</div>
         </div>
       </div>
       <div style="padding:12px 18px 6px;flex-shrink:0">
@@ -708,7 +708,7 @@ body.light .ann-head{color:#5a7a00}
 
     <div class="lead-header">
       <div class="lead-title">This Week</div>
-      <div class="lead-sub">Mon – Thu · cumulative upvotes · resets sunday midnight</div>
+      <div class="lead-sub">Mon – Thu · cumulative reactions · resets sunday midnight</div>
     </div>
     <div class="scroll-area">
       <div class="first-prize">
@@ -717,7 +717,7 @@ body.light .ann-head{color:#5a7a00}
           <div>
             <div class="fp-label">1st place prize · sponsored by epoch coffee</div>
             <div class="fp-value">$30 gift card</div>
-            <div class="fp-sponsor">most upvotes by sunday midnight wins</div>
+            <div class="fp-sponsor">most reactions by sunday midnight wins</div>
           </div>
         </div>
         <div class="fp-bar"><div class="fp-bar-fill"></div></div>
@@ -728,32 +728,32 @@ body.light .ann-head{color:#5a7a00}
         <div class="lead-item rank-1" onclick="openSubViewer('@maya_k')">
           <div class="rn">1</div>
           <div class="lt-thumb img-4"></div>
-          <div class="li-info"><div class="li-user">@maya_k</div><div class="li-cap">214 upvotes this week</div></div>
+          <div class="li-info"><div class="li-user">@maya_k</div><div class="li-cap">214 reactions this week</div></div>
           <button class="claim-btn" onclick="event.stopPropagation();openClaim()">claim 🏆</button>
         </div>
         <div class="lead-item rank-2" onclick="openSubViewer('@priya')">
           <div class="rn">2</div>
           <div class="lt-thumb img-1"></div>
-          <div class="li-info"><div class="li-user">@priya</div><div class="li-cap">189 upvotes this week</div></div>
+          <div class="li-info"><div class="li-user">@priya</div><div class="li-cap">189 reactions this week</div></div>
           <div class="share-rank-btn" onclick="event.stopPropagation();switchScreen('sharecard',null,true)">share #2 ↗</div>
         </div>
         <div class="lead-item rank-3" onclick="openSubViewer('@seb')">
           <div class="rn">3</div>
           <div class="lt-thumb img-7"></div>
-          <div class="li-info"><div class="li-user">@seb</div><div class="li-cap">97 upvotes this week</div></div>
-          <div class="upvote-btn" onclick="event.stopPropagation();toggleVote(this)"><div class="upvote-arrow">▲</div><div class="upvote-count">97</div></div>
+          <div class="li-info"><div class="li-user">@seb</div><div class="li-cap">97 reactions this week</div></div>
+          <div class="reaction-btn" onclick="event.stopPropagation();toggleVote(this)"><div class="reaction-arrow">▲</div><div class="reaction-count">97</div></div>
         </div>
         <div class="lead-item" onclick="openSubViewer('@nico_r')">
           <div class="rn">4</div>
           <div class="lt-thumb img-3"></div>
-          <div class="li-info"><div class="li-user">@nico_r</div><div class="li-cap">63 upvotes this week</div></div>
-          <div class="upvote-btn" onclick="event.stopPropagation();toggleVote(this)"><div class="upvote-arrow">▲</div><div class="upvote-count">63</div></div>
+          <div class="li-info"><div class="li-user">@nico_r</div><div class="li-cap">63 reactions this week</div></div>
+          <div class="reaction-btn" onclick="event.stopPropagation();toggleVote(this)"><div class="reaction-arrow">▲</div><div class="reaction-count">63</div></div>
         </div>
         <div class="lead-item" onclick="openSubViewer('@lex')">
           <div class="rn">5</div>
           <div class="lt-thumb img-9"></div>
-          <div class="li-info"><div class="li-user">@lex</div><div class="li-cap">51 upvotes this week</div></div>
-          <div class="upvote-btn voted" onclick="event.stopPropagation();toggleVote(this)"><div class="upvote-arrow">▲</div><div class="upvote-count">51</div></div>
+          <div class="li-info"><div class="li-user">@lex</div><div class="li-cap">51 reactions this week</div></div>
+          <div class="reaction-btn voted" onclick="event.stopPropagation();toggleVote(this)"><div class="reaction-arrow">▲</div><div class="reaction-count">51</div></div>
         </div>
         <div class="lead-item empty">
           <div class="rn" style="color:var(--accent)">—</div>
@@ -783,7 +783,7 @@ body.light .ann-head{color:#5a7a00}
         <div class="scp-overlay">
           <div class="scp-challenge">"find your ick in the wild on campus"</div>
           <div class="scp-rank">#2 this week</div>
-          <div class="scp-votes">▲ 189 upvotes</div>
+          <div class="scp-votes">▲ 189 reactions</div>
         </div>
       </div>
       <div class="share-format-tabs">
@@ -832,7 +832,7 @@ body.light .ann-head{color:#5a7a00}
 
         <div class="prof-stats">
           <div class="stat-cell"><div class="sv">31</div><div class="sk">sidequests</div></div>
-          <div class="stat-cell"><div class="sv"><span>1,240</span></div><div class="sk">upvotes</div></div>
+          <div class="stat-cell"><div class="sv"><span>1,240</span></div><div class="sk">reactions</div></div>
           <div class="stat-cell"><div class="sv">2×</div><div class="sk">won</div></div>
         </div>
         <div class="streak-row">
@@ -868,7 +868,7 @@ body.light .ann-head{color:#5a7a00}
 <!-- Annotations -->
 <div class="annotations">
   <div class="ann"><div class="ann-head">Guest view</div><div class="ann-body">Challenge visible, single blurred grid with one lock icon. No per-card text. Banner has the 847 count + join CTA.</div></div>
-  <div class="ann"><div class="ann-head">Feed upvotes</div><div class="ann-body">Upvote sits top-right on every card. Greyed when not voted, accent color when voted. Works same as leaderboard.</div></div>
+  <div class="ann"><div class="ann-head">Feed reactions</div><div class="ann-body">Reaction sits top-right on every card. Greyed when not voted, accent color when voted. Works same as leaderboard.</div></div>
   <div class="ann"><div class="ann-head">Friends tab default</div><div class="ann-body">If you chose friends-only in onboarding, feed defaults to Friends tab. Public defaults to Campus tab.</div></div>
   <div class="ann"><div class="ann-head">Add friends</div><div class="ann-body">Button opens a bottom sheet with search + contact list. Add/added states toggle on tap.</div></div>
   <div class="ann"><div class="ann-head">Edit profile</div><div class="ann-body">Tap avatar or "edit profile" to open sheet. Change emoji/photo + username. Saves to display.</div></div>
@@ -923,14 +923,14 @@ function switchFeed(mode){
   document.getElementById('friends-feed').style.display=isCampus?'none':'block';
 }
 
-// Feed upvotes
+// Feed reactions
 function toggleFeedVote(btn){
   const v=btn.classList.contains('voted');const c=btn.querySelector('.fu-count');let n=parseInt(c.textContent);
   btn.classList.toggle('voted',!v);c.textContent=v?n-1:n+1;
 }
 
-// Leaderboard upvotes
-function toggleVote(btn){const v=btn.classList.contains('voted');const c=btn.querySelector('.upvote-count');let n=parseInt(c.textContent);btn.classList.toggle('voted',!v);c.textContent=v?n-1:n+1}
+// Leaderboard reactions
+function toggleVote(btn){const v=btn.classList.contains('voted');const c=btn.querySelector('.reaction-count');let n=parseInt(c.textContent);btn.classList.toggle('voted',!v);c.textContent=v?n-1:n+1}
 
 // Upload: media tab
 function switchMediaTab(tab){['camera','photo','video','text'].forEach(t=>document.getElementById('mt-'+t).classList.remove('active'));document.getElementById('mt-'+tab).classList.add('active')}
@@ -971,7 +971,7 @@ function openSubViewer(userKey) {
   const posts = weeklyPosts[userKey] || [];
   const displayName = userKey.startsWith('anon') ? 'anon' : userKey;
   document.getElementById('sv-username').textContent = displayName;
-  document.getElementById('sv-rank-sub').textContent = rankLabels[userKey] + ' this week · ' + rankTotals[userKey] + ' total upvotes';
+  document.getElementById('sv-rank-sub').textContent = rankLabels[userKey] + ' this week · ' + rankTotals[userKey] + ' total reactions';
   const grid = document.getElementById('sv-posts-grid');
   grid.innerHTML = '';
   posts.forEach(p => {

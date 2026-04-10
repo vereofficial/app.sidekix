@@ -23,7 +23,7 @@ import { useTodayChallenge } from '../../src/hooks/useTodayChallenge';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
 import { SidekixTabState } from '../../src/components/SidekixTabState';
 import { Wordmark } from '../../src/components/Wordmark';
-import { upvotesLabel } from '../../src/lib/formatCount';
+import { reactionsLabel } from '../../src/lib/formatCount';
 import { tryGetSupabase } from '../../src/lib/supabase';
 import { font, getColors } from '../../src/theme';
 import type { PostRow } from '../../src/types/database';
@@ -62,12 +62,12 @@ export default function TodayScreen() {
   const scheme = resolvedScheme;
   const { user } = useAuth();
   const { challenge, loading: chLoad, error: chErr, refresh: refCh } = useTodayChallenge();
-  const { count: postCount, refresh: refCount } = usePostCount(challenge?.id ?? null);
+  const { count: postCount, loading: postCountLoad, refresh: refCount } = usePostCount(challenge?.id ?? null);
   const { posts: recent, loading: recLoad, refresh: refRecent } = usePostsForChallenge(
     challenge?.id ?? null,
     12,
     undefined,
-    !chLoad,
+    Boolean(challenge?.id),
   );
   const { posts: myPosts, loading: myLoad, refresh: refMyPosts } = useMyPosts(user?.id);
   const { pastChallenges, refresh: refPast } = usePastChallenges();
@@ -82,6 +82,11 @@ export default function TodayScreen() {
   const [stripNames, setStripNames] = useState<Record<string, string>>({});
   const [didHydrateMyPosts, setDidHydrateMyPosts] = useState(false);
   const [pastPostCounts, setPastPostCounts] = useState<Record<string, number>>({});
+  /**
+   * After the first successful post-count + recent fetch for this challenge id, ignore loading flags
+   * from tab-focus refetch — otherwise strips vanish/spinner flashes every time you land on Today.
+   */
+  const [feedSyncedChallengeId, setFeedSyncedChallengeId] = useState<string | null>(null);
   /** Avoid full-screen spinner on every tab focus refetch when today has no challenge (refCh sets loading=true). */
   const challengeFetchCompletedOnceRef = useRef(false);
   const [challengeRetryPending, setChallengeRetryPending] = useState(false);
@@ -93,6 +98,16 @@ export default function TodayScreen() {
   useEffect(() => {
     if (!chLoad && challengeRetryPending) setChallengeRetryPending(false);
   }, [chLoad, challengeRetryPending]);
+
+  useEffect(() => {
+    setFeedSyncedChallengeId(null);
+  }, [challenge?.id]);
+
+  useEffect(() => {
+    if (challenge?.id && !postCountLoad && !recLoad) {
+      setFeedSyncedChallengeId(challenge.id);
+    }
+  }, [challenge?.id, postCountLoad, recLoad]);
 
   const msLeft = useMemo(() => {
     const e = new Date();
@@ -143,7 +158,14 @@ export default function TodayScreen() {
   const firstPosterOnly = Boolean(postedToday && postCount === 1 && myPostToday);
   const canUploadToday = Boolean(challenge && !postedToday);
   const campusHasPostsOthers = !postedToday && postCount > 0;
-  const emptyCampus = !postedToday && postCount === 0;
+
+  const feedInitialPending =
+    Boolean(challenge?.id) &&
+    (postCountLoad || recLoad) &&
+    feedSyncedChallengeId !== challenge?.id;
+
+  /** “Be first” only after first count sync; refetch must not toggle this. */
+  const emptyCampus = !postedToday && postCount === 0 && !feedInitialPending;
 
   const myVotesOnPost = useMemo(() => {
     if (!myPostToday) return 0;
@@ -192,10 +214,19 @@ export default function TodayScreen() {
     return `${others} other ${others === 1 ? 'person has' : 'people have'} posted today too.`;
   }, [postCount]);
 
-  const showRecentSection = postCount > 0 && !firstPosterOnly && !campusHasPostsOthers;
+  const showRecentSection =
+    !feedInitialPending && postCount > 0 && !firstPosterOnly && !campusHasPostsOthers;
   /** Recent calendar challenges before today; status = user posted or not. */
   const pastRowsToShow = useMemo(() => pastChallenges.slice(0, 8), [pastChallenges]);
+  /** Keep mounted during past-list refetch (rows stay populated; pastListLoad would flash UI off). */
   const showPastSection = pastRowsToShow.length > 0;
+
+  /** Prefer showing last good strip during refetch instead of a spinner when we already have tiles. */
+  const showSoFarTodayStrip =
+    campusHasPostsOthers &&
+    !feedInitialPending &&
+    (recent.length > 0 || !recLoad);
+  const showRecentStripGrid = showRecentSection && (recent.length > 0 || !recLoad);
 
   useEffect(() => {
     const ids = pastRowsToShow.map((c) => c.id);
@@ -332,7 +363,7 @@ export default function TodayScreen() {
                     {captionPreview(myPostToday)}
                   </Text>
                   <Text style={[styles.heroVotes, { color: colors.accent, fontFamily: font.syne }]}>
-                    ▲ {upvotesLabel(myVotesOnPost)} so far
+                    ▲ {reactionsLabel(myVotesOnPost)} so far
                   </Text>
                 </View>
                 <View style={styles.heroSharePill}>
@@ -407,23 +438,27 @@ export default function TodayScreen() {
           </View>
         )}
 
-        {campusHasPostsOthers && !recLoad ? (
+        {showSoFarTodayStrip ? (
           <View style={{ marginTop: 8 }}>
             <View style={styles.sectionRow}>
               <Text style={[styles.sectionTitle, { color: colors.text3, fontFamily: font.syne }]}>so far today</Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stripTall}>
-              {recent.map((p) => (
-                <View key={p.id} style={styles.pcTall}>
-                  <PostMediaTile post={p} style={{ width: '100%', height: 112, borderRadius: 12 }} borderRadius={12} />
-                  <Text style={[styles.stripHandle, { color: colors.text2, fontFamily: font.syne }]} numberOfLines={1}>
-                    {p.is_anonymous ? 'anon' : `@${stripNames[p.user_id] ?? '…'}`}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
+            {recent.length === 0 && recLoad ? (
+              <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stripTall}>
+                {recent.map((p) => (
+                  <View key={p.id} style={styles.pcTall}>
+                    <PostMediaTile post={p} style={{ width: '100%', height: 112, borderRadius: 12 }} borderRadius={12} />
+                    <Text style={[styles.stripHandle, { color: colors.text2, fontFamily: font.syne }]} numberOfLines={1}>
+                      {p.is_anonymous ? 'anon' : `@${stripNames[p.user_id] ?? '…'}`}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
           </View>
-        ) : campusHasPostsOthers && recLoad ? (
+        ) : campusHasPostsOthers && feedInitialPending && recent.length === 0 ? (
           <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
         ) : null}
 
@@ -436,20 +471,20 @@ export default function TodayScreen() {
                 </Text>
               </View>
             </View>
-            {recLoad ? (
+            {!showRecentStripGrid ? (
               <ActivityIndicator color={colors.accent} style={{ marginVertical: 20 }} />
             ) : (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[styles.strip, !showPastSection && styles.stripExpanded]}
+                contentContainerStyle={styles.strip}
               >
                 {recent.map((p) => (
-                  <View key={p.id} style={[styles.pc, !showPastSection && styles.pcExpanded]}>
+                  <View key={p.id} style={styles.pc}>
                     <PostMediaTile
                       post={p}
-                      style={!showPastSection ? { width: 104, height: 104 } : { width: 72, height: 72 }}
-                      borderRadius={!showPastSection ? 12 : 10}
+                      style={{ width: 72, height: 72 }}
+                      borderRadius={10}
                     />
                     <View style={styles.pvWrap}>
                       <Text style={[styles.pv, { color: colors.accent, fontFamily: font.syne }]}>▲ {p.vote_count}</Text>
@@ -638,10 +673,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase' },
   strip: { paddingHorizontal: 18, gap: 7, flexDirection: 'row' },
-  stripExpanded: { gap: 10, paddingBottom: 6 },
   stripTall: { paddingHorizontal: 18, gap: 10, flexDirection: 'row', paddingBottom: 4 },
   pc: { width: 72, height: 72, position: 'relative' },
-  pcExpanded: { width: 104, height: 104 },
   pcTall: { width: 120 },
   stripHandle: { fontSize: 11, marginTop: 6, textAlign: 'center' },
   pvWrap: {

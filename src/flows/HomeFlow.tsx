@@ -68,7 +68,7 @@ export function HomeFlow() {
   const joinScale = useRef(new Animated.Value(1)).current;
   const { challenge, loading: chLoading } = useTodayChallenge();
   const { count: postCount } = usePostCount(challenge?.id ?? null);
-  const { posts: recentPosts } = usePostsForChallenge(challenge?.id ?? null, 4, undefined, !chLoading);
+  const { posts: recentPosts } = usePostsForChallenge(challenge?.id ?? null, 4, undefined, Boolean(challenge?.id));
 
   const bannerHeadline =
     postCount < 10
