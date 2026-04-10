@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.sidekix.mobile"
+      "bundleIdentifier": "com.vereofficial.vere"
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
