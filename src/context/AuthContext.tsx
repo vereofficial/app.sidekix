@@ -16,7 +16,7 @@ type AuthCtx = {
   signInWithPhone: (e164Phone: string) => Promise<{ error: string | null }>;
   verifyPhoneOtp: (e164Phone: string, token: string) => Promise<{ error: string | null; profile: ProfileRow | null }>;
   saveProfile: (username: string, emoji?: string, avatarPath?: string | null) => Promise<{ error: string | null }>;
-  /** Password sign-in for development builds only. */
+  /** Email + password via Supabase Auth (enable Email provider in dashboard). */
   signInWithEmailPassword: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<ProfileRow | null>;
@@ -207,9 +207,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signInWithEmailPassword = useCallback(async (email: string, password: string) => {
-    if (!__DEV__) {
-      return { error: 'Email sign-in is only enabled in development builds.' };
-    }
     const sb = tryGetSupabase();
     if (!sb) return { error: 'Not configured' };
     const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
