@@ -340,7 +340,12 @@ export function HomeFlow() {
               <>
                 <Text style={styles.obEmoji}>📲</Text>
                 <Text style={[styles.obTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>check your texts</Text>
-                <Text style={[styles.obSub, { color: colors.text2, fontFamily: font.dm }]}>
+                <Text
+                  style={[
+                    styles.obSub,
+                    { color: colors.text2, fontFamily: font.dm, marginBottom: 16, paddingBottom: 4 },
+                  ]}
+                >
                   enter the 6-digit code we sent to {e164 || 'your number'}
                 </Text>
                 <TextInput
@@ -451,22 +456,29 @@ export function HomeFlow() {
                 </View>
               </>
             ) : (
-              <Pressable
-                onPress={verify}
-                disabled={busy}
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  { backgroundColor: colors.accent, opacity: pressed || busy ? 0.85 : 1 },
-                ]}
-              >
-                {busy ? (
-                  <ActivityIndicator color={scheme === 'light' ? '#fff' : '#0a0a0a'} />
-                ) : (
-                  <Text style={[styles.primaryBtnText, { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne }]}>
-                    verify →
+              <>
+                <Pressable
+                  onPress={verify}
+                  disabled={busy}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    { backgroundColor: colors.accent, opacity: pressed || busy ? 0.85 : 1 },
+                  ]}
+                >
+                  {busy ? (
+                    <ActivityIndicator color={scheme === 'light' ? '#fff' : '#0a0a0a'} />
+                  ) : (
+                    <Text style={[styles.primaryBtnText, { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne }]}>
+                      verify →
+                    </Text>
+                  )}
+                </Pressable>
+                <Pressable onPress={() => setPhase('guest')}>
+                  <Text style={[styles.secondaryBtn, { color: colors.text2, fontFamily: font.syne }]}>
+                    peek first, sign up later
                   </Text>
-                )}
-              </Pressable>
+                </Pressable>
+              </>
             )}
           </View>
         </ScrollView>
