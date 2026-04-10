@@ -9,7 +9,9 @@
     "start:lan": "expo start --lan",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "eas:build:ios": "cross-env EXPO_NO_CAPABILITY_SYNC=1 eas build --platform ios",
+    "eas:build:android": "cross-env EXPO_NO_CAPABILITY_SYNC=1 eas build --platform android"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",
@@ -49,6 +51,7 @@
   "devDependencies": {
     "@types/react": "~19.1.0",
     "@vercel/node": "^5.7.2",
+    "cross-env": "^10.1.0",
     "typescript": "~5.9.2"
   },
   "private": true
