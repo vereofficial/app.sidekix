@@ -1,6 +1,6 @@
 {
   "name": "sidekix",
-  "version": "2.6",
+  "version": "2.9",
   "main": "expo-router/entry",
   "scripts": {
     "build": "expo export --platform web",
