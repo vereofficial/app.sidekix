@@ -4,7 +4,7 @@
     "slug": "sidekix",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app-icon-light.png",
     "userInterfaceStyle": "automatic",
     "scheme": "sidekix",
     "newArchEnabled": true,
@@ -15,13 +15,17 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vereofficial.vere"
+      "bundleIdentifier": "com.vereofficial.vere",
+      "icon": {
+        "light": "./assets/app-icon-light.png",
+        "dark": "./assets/app-icon-dark.png"
+      }
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/app-icon-light.png",
+        "backgroundColor": "#F5F2EB"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
