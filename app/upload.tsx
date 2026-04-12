@@ -27,6 +27,8 @@ import { hapticHeavy, hapticSuccess } from '../src/lib/haptics';
 import { tryGetSupabase } from '../src/lib/supabase';
 import { MAX_POST_CAPTION_CHARS } from '../src/constants/postText';
 import { readLocalUriAsArrayBuffer } from '../src/lib/readLocalMediaForUpload';
+import { TextPostPresetSwatch } from '../src/components/TextPostPresetSwatch';
+import { TEXT_POST_PRESETS, clampTextPostStyle } from '../src/lib/textPostPresets';
 import { font, getColors } from '../src/theme';
 
 const MAX_VIDEO_MS = 10_000;
@@ -51,13 +53,17 @@ export default function UploadScreen() {
   /** Picker-reported MIME; avoids wrong `contentType` when uploading bytes. */
   const [localMime, setLocalMime] = useState<string | null>(null);
   const [textBody, setTextBody] = useState('');
+  const [textStyle, setTextStyle] = useState(0);
   const [busy, setBusy] = useState(false);
 
   const setModeAndClear = (m: CaptureMode) => {
     setMode(m);
     setLocalUri(null);
     setLocalMime(null);
-    if (m !== 'text') setTextBody('');
+    if (m !== 'text') {
+      setTextBody('');
+      setTextStyle(0);
+    }
   };
 
   const pick = async (fromCamera: boolean, media: 'image' | 'video') => {
@@ -118,6 +124,7 @@ export default function UploadScreen() {
         image_path?: string | null;
         video_path?: string | null;
         caption?: string | null;
+        text_style?: number;
       } = {
         challenge_id: challenge.id,
         user_id: user.id,
@@ -127,6 +134,7 @@ export default function UploadScreen() {
       if (mode === 'text') {
         // Use `caption` so older DBs without a `body` column still work (avoids PostgREST schema errors).
         baseRow.caption = textTrim.slice(0, MAX_POST_CAPTION_CHARS);
+        baseRow.text_style = clampTextPostStyle(textStyle);
       } else {
         const uri = localUri;
         if (!uri) return;
@@ -294,6 +302,21 @@ export default function UploadScreen() {
             <Text style={[styles.charCount, { color: colors.text3, fontFamily: font.dm }]}>
               {textBody.length} / {MAX_POST_CAPTION_CHARS}
             </Text>
+            <Text style={[styles.presetLabel, { color: colors.text3, fontFamily: font.syne }]}>background</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.presetScroll}
+            >
+              {TEXT_POST_PRESETS.map((p) => (
+                <TextPostPresetSwatch
+                  key={p.id}
+                  presetId={p.id}
+                  selected={textStyle === p.id}
+                  onPress={() => setTextStyle(p.id)}
+                />
+              ))}
+            </ScrollView>
           </View>
         ) : (
           <>
@@ -396,7 +419,7 @@ export default function UploadScreen() {
             <Pressable
               onPress={() => {
                 setShowWin(false);
-                router.push('/sharecard');
+                router.replace('/sharecard');
               }}
               style={({ pressed }) => [
                 styles.winShareBtn,
@@ -472,6 +495,8 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   charCount: { fontSize: 11, marginTop: 8, textAlign: 'right' },
+  presetLabel: { fontSize: 9, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 16, marginBottom: 10 },
+  presetScroll: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4, paddingRight: 8 },
   anonRow: {
     marginHorizontal: 18,
     marginTop: 14,

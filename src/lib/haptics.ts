@@ -31,3 +31,17 @@ export function hapticChallengeDropBurst() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, 220);
 }
+
+/**
+ * Distinct pattern when the 10am sidequest notification fires (foreground).
+ * Custom notification sounds require bundling audio in native projects; see Expo Notifications docs.
+ */
+export function hapticSidequestDropAlarm() {
+  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  setTimeout(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  }, 140);
+  setTimeout(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
+  }, 280);
+}

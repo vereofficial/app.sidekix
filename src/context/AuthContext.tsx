@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { clearChallengeDropDismissed } from '../lib/challengeDropStorage';
 import { insertProfileWithGeneratedUsername } from '../lib/ensureProfileInsert';
 import { tryGetSupabase } from '../lib/supabase';
-import { isSupabaseConfigured } from '../lib/supabaseConfig';
+import { getSupabasePublicConfig, isSupabaseConfigured } from '../lib/supabaseConfig';
 import { formatAuthError } from '../lib/formatAuthError';
 import type { ProfileRow } from '../types/database';
 
@@ -19,6 +19,10 @@ type AuthCtx = {
   /** Email + password via Supabase Auth (enable Email provider in dashboard). */
   signInWithEmailPassword: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  /** Calls Supabase Edge Function `delete-account` (deploy required). */
+  deleteAccount: () => Promise<{ error: string | null }>;
+  /** Requires `profiles.friends_only` column + RLS migration `010_friends_only_mode`. */
+  setFriendsOnly: (friendsOnly: boolean) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<ProfileRow | null>;
 };
 
@@ -179,13 +183,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const uid = session?.user?.id;
       if (!uid) return { error: 'Not signed in' };
       if (__DEV__ && uid.startsWith('dev-')) {
-        setProfile({
+        setProfile((prev) => ({
           id: uid,
           username: username.trim().toLowerCase().replace(/^@/, ''),
           display_emoji: emoji,
           avatar_path: avatarPath ?? null,
-          created_at: new Date().toISOString(),
-        });
+          friends_only: prev?.friends_only ?? false,
+          created_at: prev?.created_at ?? new Date().toISOString(),
+        }));
         return { error: null };
       }
       if (!sb) return { error: 'Not configured' };
@@ -220,6 +225,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   }, []);
 
+  const setFriendsOnly = useCallback(
+    async (friendsOnly: boolean) => {
+      const uid = session?.user?.id;
+      if (!uid) return { error: 'Not signed in' };
+      if (__DEV__ && uid.startsWith('dev-')) {
+        setProfile((prev) =>
+          prev
+            ? { ...prev, friends_only: friendsOnly }
+            : {
+                id: uid,
+                username: 'dev_user',
+                display_emoji: '🌵',
+                avatar_path: null,
+                friends_only: friendsOnly,
+                created_at: new Date().toISOString(),
+              },
+        );
+        return { error: null };
+      }
+      const sb = tryGetSupabase();
+      if (!sb) return { error: 'Not configured' };
+      const { error } = await sb
+        .from('profiles')
+        .update({ friends_only: friendsOnly, updated_at: new Date().toISOString() })
+        .eq('id', uid);
+      if (error) return { error: error.message };
+      await refreshProfile();
+      return { error: null };
+    },
+    [session?.user?.id, refreshProfile],
+  );
+
+  const deleteAccount = useCallback(async () => {
+    if (!isSupabaseConfigured()) return { error: 'Not configured' };
+    const sb = tryGetSupabase();
+    if (!sb) return { error: 'Not configured' };
+    const { data: sessWrap } = await sb.auth.getSession();
+    const token = sessWrap.session?.access_token;
+    if (!token) return { error: 'Not signed in' };
+    let url: string;
+    let anonKey: string;
+    try {
+      ({ url, anonKey } = getSupabasePublicConfig());
+    } catch {
+      return { error: 'Not configured' };
+    }
+    const fnUrl = `${url.replace(/\/$/, '')}/functions/v1/delete-account`;
+    let res: Response;
+    try {
+      res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Network error' };
+    }
+    let body: { error?: string } = {};
+    try {
+      body = (await res.json()) as { error?: string };
+    } catch {
+      /* ignore */
+    }
+    if (!res.ok) {
+      return {
+        error:
+          typeof body.error === 'string'
+            ? body.error
+            : res.status === 404
+              ? 'Account deletion is not set up yet (deploy the delete-account Edge Function in Supabase).'
+              : 'Could not delete account',
+      };
+    }
+    await sb.auth.signOut();
+    setSession(null);
+    setProfile(null);
+    return { error: null };
+  }, []);
+
   const value = useMemo(
     () => ({
       session,
@@ -232,6 +319,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       saveProfile,
       signInWithEmailPassword,
       signOut,
+      deleteAccount,
+      setFriendsOnly,
       refreshProfile,
     }),
     [
@@ -244,6 +333,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       saveProfile,
       signInWithEmailPassword,
       signOut,
+      deleteAccount,
+      setFriendsOnly,
       refreshProfile,
     ],
   );

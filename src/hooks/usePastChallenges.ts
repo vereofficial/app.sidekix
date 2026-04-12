@@ -21,7 +21,7 @@ export function usePastChallenges() {
       .select('*')
       .lt('day', day)
       .order('day', { ascending: false })
-      .limit(12);
+      .limit(2);
     setRows((data ?? []) as ChallengeRow[]);
     setLoading(false);
   }, []);

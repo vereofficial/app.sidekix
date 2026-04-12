@@ -1,9 +1,32 @@
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { router } from 'expo-router';
+import {
+  clearChallengeDropDismissed,
+  requestChallengeDropForceReveal,
+} from './challengeDropStorage';
+import {
+  NOTIF_FRIEND_TITLE,
+  NOTIF_REACTION_TITLE,
+  NOTIF_SIDEQUEST_BODY,
+  NOTIF_SIDEQUEST_TITLE,
+  notifFriendAcceptedBody,
+  notifFriendRequestBody,
+  notifReactionMilestoneBody,
+} from './notificationMessages';
+import { tryGetSupabase } from './supabase';
+import { hapticLight, hapticSidequestDropAlarm } from './haptics';
 
 const ANDROID_CHANNEL = 'sidekix-default';
 
-/** Daily local reminder: sidequest is in the app at midnight; we nudge at 10:00 user timezone. */
+/** Match `identifier` in scheduleNotificationAsync — used when handling taps. */
+export const SIDEQUEST_10AM_ID = 'sidekix-sidequest-10am';
+
+export const SIDEQUEST_NOTIFICATION_DATA = { kind: 'sidequest_drop' as const };
+
+export type FriendNotificationKind = 'friend_request' | 'friend_accept';
+
 export async function initNotificationHandler() {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -18,12 +41,12 @@ export async function initNotificationHandler() {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL, {
       name: 'Sidekix',
-      importance: Notifications.AndroidImportance.DEFAULT,
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: 'default',
+      vibrationPattern: [0, 180, 80, 180],
     });
   }
 }
-
-const SIDEQUEST_10AM_ID = 'sidekix-sidequest-10am';
 
 function dailyTenAmTrigger(): Notifications.DailyTriggerInput {
   return {
@@ -34,7 +57,81 @@ function dailyTenAmTrigger(): Notifications.DailyTriggerInput {
   };
 }
 
-/** Schedules the repeating 10:00 local notification; replaces any previous “sidequest drop” schedule. */
+async function openFeedTab() {
+  try {
+    router.replace('/(tabs)/feed');
+  } catch {
+    /* router may not be ready */
+  }
+}
+
+async function openTodayForSidequestDrop() {
+  await clearChallengeDropDismissed();
+  await requestChallengeDropForceReveal();
+  try {
+    router.replace('/(tabs)/today');
+  } catch {
+    /* router may not be ready */
+  }
+}
+
+function isSidequestNotification(request: Notifications.NotificationRequest): boolean {
+  const d = request.content.data as { kind?: string } | undefined;
+  return request.identifier === SIDEQUEST_10AM_ID || d?.kind === 'sidequest_drop';
+}
+
+/**
+ * Call once after initNotificationHandler. Returns cleanup.
+ * Customize 10am copy in `src/lib/notificationMessages.ts`.
+ */
+export function attachSidequestNotificationHandlers(): () => void {
+  if (Platform.OS === 'web') return () => {};
+
+  const received = Notifications.addNotificationReceivedListener((event) => {
+    if (isSidequestNotification(event.request)) {
+      void hapticSidequestDropAlarm();
+    }
+  });
+
+  const response = Notifications.addNotificationResponseReceivedListener((res) => {
+    const req = res.notification.request;
+    if (isSidequestNotification(req)) {
+      void openTodayForSidequestDrop();
+      return;
+    }
+    const d = req.content.data as { kind?: string } | undefined;
+    if (d?.kind === 'friend_request' || d?.kind === 'friend_accept') {
+      void openFeedTab();
+    }
+  });
+
+  return () => {
+    received.remove();
+    response.remove();
+  };
+}
+
+/** If the app was cold-opened from a notification, handle sidequest drop or friend social once. */
+export async function consumeInitialSidequestNotificationIfAny(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const last = await Notifications.getLastNotificationResponseAsync();
+    if (!last) return;
+    const req = last.notification.request;
+    if (isSidequestNotification(req)) {
+      await openTodayForSidequestDrop();
+      return;
+    }
+    const d = req.content.data as { kind?: string } | undefined;
+    if (d?.kind === 'friend_request' || d?.kind === 'friend_accept') {
+      await openFeedTab();
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Schedules the repeating 10:00 local notification; replaces any previous schedule. */
 export async function scheduleSidequestDropReminder() {
   if (Platform.OS === 'web') return;
 
@@ -51,22 +148,145 @@ export async function scheduleSidequestDropReminder() {
   await Notifications.scheduleNotificationAsync({
     identifier: SIDEQUEST_10AM_ID,
     content: {
-      title: 'Sidequest',
-      body: 'Today’s prompt is ready — open Sidekix.',
+      title: NOTIF_SIDEQUEST_TITLE,
+      body: NOTIF_SIDEQUEST_BODY,
+      sound: Platform.OS === 'ios' ? 'default' : undefined,
+      data: { ...SIDEQUEST_NOTIFICATION_DATA },
     },
     trigger: dailyTenAmTrigger(),
   });
 }
 
-/** Fire a one-off local notification when crossing a reaction-count threshold (call from app after refresh). */
 export async function notifyReactionMilestone(total: number, milestone: number) {
   if (Platform.OS === 'web') return;
   if (total < milestone) return;
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Reactions',
-      body: `Your post hit ${milestone} reactions.`,
+      title: NOTIF_REACTION_TITLE,
+      body: notifReactionMilestoneBody(milestone),
     },
     trigger: null,
   });
+}
+
+async function socialNotificationsEnabled(userId: string): Promise<boolean> {
+  const sb = tryGetSupabase();
+  if (!sb) return true;
+  const { data } = await sb.from('notification_preferences').select('social').eq('user_id', userId).maybeSingle();
+  const row = data as { social?: boolean } | null;
+  if (!row) return true;
+  return row.social !== false;
+}
+
+async function presentLocalFriendNotification(
+  kind: FriendNotificationKind,
+  username: string,
+  requestId: string,
+): Promise<void> {
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') return;
+
+  const body =
+    kind === 'friend_request' ? notifFriendRequestBody(username) : notifFriendAcceptedBody(username);
+
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: NOTIF_FRIEND_TITLE,
+      body,
+      sound: Platform.OS === 'ios' ? 'default' : undefined,
+      data: { kind, request_id: requestId },
+      ...(Platform.OS === 'android' ? { android: { channelId: ANDROID_CHANNEL } } : {}),
+    },
+    trigger: null,
+  });
+}
+
+/**
+ * Registers the Expo push token for server-side delivery (notification_outbox worker / future Edge Function).
+ */
+export async function registerExpoPushTokenForUser(userId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
+
+    const projectId =
+      (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ??
+      (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId;
+    if (!projectId) return;
+
+    const tokenRes = await Notifications.getExpoPushTokenAsync({ projectId });
+    const token = tokenRes.data;
+    const sb = tryGetSupabase();
+    if (!sb) return;
+
+    await sb.from('user_push_tokens').upsert(
+      {
+        user_id: userId,
+        expo_push_token: token,
+        platform: Platform.OS,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,expo_push_token' },
+    );
+  } catch {
+    /* simulator / no projectId / network */
+  }
+}
+
+/**
+ * Subscribes to friend_requests so we show local notifications when someone requests you or accepts yours.
+ * Requires migration `017_friend_requests_realtime.sql` (replica identity + supabase_realtime).
+ */
+export function attachFriendRequestRealtime(userId: string): () => void {
+  if (Platform.OS === 'web') return () => {};
+  if (userId.startsWith('dev-')) return () => {};
+
+  const sb = tryGetSupabase();
+  if (!sb) return () => {};
+
+  const seen = new Set<string>();
+
+  const channel = sb
+    .channel(`friend-req:${userId}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'friend_requests', filter: `addressee_id=eq.${userId}` },
+      async (payload) => {
+        const row = payload.new as { id: string; requester_id: string; status: string };
+        if (row.status !== 'pending') return;
+        const dedupe = `in:${row.id}`;
+        if (seen.has(dedupe)) return;
+        seen.add(dedupe);
+        if (!(await socialNotificationsEnabled(userId))) return;
+
+        const { data: prof } = await sb.from('profiles').select('username').eq('id', row.requester_id).maybeSingle();
+        const username = (prof as { username?: string } | null)?.username ?? 'someone';
+        void hapticLight();
+        await presentLocalFriendNotification('friend_request', username, row.id);
+      },
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'friend_requests', filter: `requester_id=eq.${userId}` },
+      async (payload) => {
+        const oldRow = payload.old as { status?: string } | undefined;
+        const row = payload.new as { id: string; addressee_id: string; status: string };
+        if (oldRow?.status !== 'pending' || row.status !== 'accepted') return;
+        const dedupe = `acc:${row.id}`;
+        if (seen.has(dedupe)) return;
+        seen.add(dedupe);
+        if (!(await socialNotificationsEnabled(userId))) return;
+
+        const { data: prof } = await sb.from('profiles').select('username').eq('id', row.addressee_id).maybeSingle();
+        const username = (prof as { username?: string } | null)?.username ?? 'someone';
+        void hapticLight();
+        await presentLocalFriendNotification('friend_accept', username, row.id);
+      },
+    )
+    .subscribe();
+
+  return () => {
+    void sb.removeChannel(channel);
+  };
 }

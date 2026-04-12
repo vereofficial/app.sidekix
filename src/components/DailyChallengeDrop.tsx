@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../context/AppThemeContext';
 import { useTodayChallenge } from '../hooks/useTodayChallenge';
 import {
+  consumeChallengeDropForceReveal,
   isChallengeDropDismissed,
   markChallengeDropDismissed,
 } from '../lib/challengeDropStorage';
@@ -25,6 +26,12 @@ export function DailyChallengeDrop() {
       return;
     }
     try {
+      const force = await consumeChallengeDropForceReveal();
+      if (force) {
+        setOverlayKey((k) => k + 1);
+        setVisible(true);
+        return;
+      }
       const dismissed = await isChallengeDropDismissed();
       if (!dismissed) {
         setOverlayKey((k) => k + 1);

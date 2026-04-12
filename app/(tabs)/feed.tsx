@@ -24,6 +24,7 @@ import { useAppTheme } from '../../src/context/AppThemeContext';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
 import { SidekixTabState } from '../../src/components/SidekixTabState';
 import { useFollows } from '../../src/hooks/useFollows';
+import { useFriendRequests } from '../../src/hooks/useFriendRequests';
 import { usePostsForChallenge } from '../../src/hooks/usePostsForChallenge';
 import { useTodayChallenge } from '../../src/hooks/useTodayChallenge';
 import { usePostedToday } from '../../src/hooks/usePostedToday';
@@ -33,6 +34,8 @@ import { sharePostLink } from '../../src/lib/sharePost';
 import { tryGetSupabase } from '../../src/lib/supabase';
 import type { ProfileRow } from '../../src/types/database';
 import { font, getColors } from '../../src/theme';
+
+const TABLET_CONTENT_MAX = 560;
 
 const FRIEND_AVATAR_BG = ['#6B4E3D', '#2D7A7A', '#6B4FA3', '#B85C5C', '#4A6FA5'];
 
@@ -56,7 +59,8 @@ export default function FeedScreen() {
     user?.id,
     Boolean(challenge?.id),
   );
-  const { followingIds, refresh: refFollows } = useFollows();
+  const { followingIds, followerIds, refresh: refFollows } = useFollows();
+  const { incoming, outgoingIds, refresh: refFriendReq } = useFriendRequests(user?.id);
   const postedToday = usePostedToday(user?.id);
   const [mode, setMode] = useState<'campus' | 'friends'>('campus');
   const [sheet, setSheet] = useState(false);
@@ -64,25 +68,37 @@ export default function FeedScreen() {
   const [results, setResults] = useState<ProfileRow[]>([]);
   const [friendProfiles, setFriendProfiles] = useState<ProfileRow[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [usernames, setUsernames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     void refFollows(user?.id);
   }, [user?.id, refFollows]);
 
   useEffect(() => {
+    if (sheet) void refFriendReq();
+  }, [sheet, refFriendReq]);
+
+  useEffect(() => {
+    if (mode === 'friends') void refFriendReq();
+  }, [mode, refFriendReq]);
+
+  const mutualFriendIds = useMemo(
+    () => followingIds.filter((id) => followerIds.includes(id)),
+    [followingIds, followerIds],
+  );
+
+  useEffect(() => {
     const loadFriends = async () => {
       const sb = tryGetSupabase();
-      if (!sb || followingIds.length === 0) {
+      if (!sb || mutualFriendIds.length === 0) {
         setFriendProfiles([]);
         return;
       }
-      const { data } = await sb.from('profiles').select('*').in('id', followingIds).limit(30);
+      const { data } = await sb.from('profiles').select('*').in('id', mutualFriendIds).limit(30);
       setFriendProfiles((data ?? []) as ProfileRow[]);
     };
     void loadFriends();
-  }, [followingIds]);
-
-  const [usernames, setUsernames] = useState<Record<string, string>>({});
+  }, [mutualFriendIds]);
 
   useEffect(() => {
     const load = async () => {
@@ -102,8 +118,8 @@ export default function FeedScreen() {
 
   const visible = useMemo(() => {
     if (mode === 'campus') return posts;
-    return posts.filter((p) => followingIds.includes(p.user_id));
-  }, [mode, posts, followingIds]);
+    return posts.filter((p) => mutualFriendIds.includes(p.user_id));
+  }, [mode, posts, mutualFriendIds]);
 
   const sparseCampusFeed = mode === 'campus' && visible.length > 0 && visible.length <= 3;
 
@@ -131,21 +147,24 @@ export default function FeedScreen() {
 
   const onPull = async () => {
     setRefreshing(true);
-    await Promise.all([refCh(), refresh(), refFollows(user?.id)]);
+    await Promise.all([refCh(), refresh(), refFollows(user?.id), refFriendReq()]);
     setRefreshing(false);
   };
 
   const runSearch = async () => {
     const sb = tryGetSupabase();
     const q = search.trim().replace(/^@+/, '');
-    if (!sb || !user?.id || !q) return;
+    if (!sb || !user?.id) return;
+    if (!q) {
+      Alert.alert('Search', 'Enter a username to search.');
+      return;
+    }
     Keyboard.dismiss();
-    const { data, error } = await sb
-      .from('profiles')
-      .select('*')
-      .neq('id', user.id)
-      .ilike('username', `%${q}%`)
-      .limit(25);
+    // Use RPC so friends-only profiles still appear for username search (RLS hides them when you don’t follow).
+    const { data, error } = await sb.rpc('search_profiles_for_add_friends', {
+      p_query: q,
+      p_exclude: user.id,
+    });
     if (error) {
       Alert.alert('Search', error.message);
       return;
@@ -153,25 +172,186 @@ export default function FeedScreen() {
     setResults((data ?? []) as ProfileRow[]);
   };
 
-  const follow = async (id: string) => {
+  const requestFollow = async (targetId: string) => {
     const sb = tryGetSupabase();
     if (!sb || !user?.id) return;
-    const { error } = await sb.from('follows').insert({ follower_id: user.id, following_id: id });
-    if (error) {
-      Alert.alert('Follow', error.message);
+    if (mutualFriendIds.includes(targetId)) return;
+    if (outgoingIds.includes(targetId)) {
+      Alert.alert('Follow request', 'You already have a pending request with this person.');
       return;
     }
-    await refFollows(user.id);
-    setResults((prev) => prev.filter((p) => p.id !== id));
+    const { data: existing } = await sb
+      .from('friend_requests')
+      .select('id, status')
+      .eq('requester_id', user.id)
+      .eq('addressee_id', targetId)
+      .maybeSingle();
+    const row = existing as { id: string; status: string } | null;
+    if (row?.status === 'pending') {
+      Alert.alert('Follow request', 'You already have a pending request with this person.');
+      return;
+    }
+    if (row?.status === 'accepted') {
+      if (mutualFriendIds.includes(targetId)) {
+        await refFollows(user.id);
+        return;
+      }
+      // Row still "accepted" but follows were removed (e.g. unfriend) — delete so we can send a new request.
+      const { error: delErr } = await sb.from('friend_requests').delete().eq('id', row.id);
+      if (delErr) {
+        Alert.alert('Follow request', delErr.message);
+        return;
+      }
+    } else if (row?.status === 'declined') {
+      const { error: delErr } = await sb.from('friend_requests').delete().eq('id', row.id);
+      if (delErr) {
+        Alert.alert('Follow request', delErr.message);
+        return;
+      }
+    }
+
+    const { error } = await sb.from('friend_requests').insert({
+      requester_id: user.id,
+      addressee_id: targetId,
+      status: 'pending',
+    });
+    if (error) {
+      if ((error as { code?: string }).code === '23505') {
+        Alert.alert('Follow request', 'You already have a pending request with this person.');
+      } else {
+        Alert.alert('Follow request', error.message);
+      }
+      return;
+    }
+    await refFriendReq();
   };
+
+  const acceptIncomingRequest = async (requestId: string) => {
+    const sb = tryGetSupabase();
+    if (!sb || !user?.id) return;
+    const { error } = await sb
+      .from('friend_requests')
+      .update({ status: 'accepted', updated_at: new Date().toISOString() })
+      .eq('id', requestId)
+      .eq('addressee_id', user.id)
+      .eq('status', 'pending');
+    if (error) {
+      Alert.alert('Follow request', error.message);
+      return;
+    }
+    await Promise.all([refFriendReq(), refFollows(user.id)]);
+  };
+
+  const declineIncomingRequest = async (requestId: string) => {
+    const sb = tryGetSupabase();
+    if (!sb || !user?.id) return;
+    const { error } = await sb
+      .from('friend_requests')
+      .update({ status: 'declined', updated_at: new Date().toISOString() })
+      .eq('id', requestId)
+      .eq('addressee_id', user.id)
+      .eq('status', 'pending');
+    if (error) {
+      Alert.alert('Follow request', error.message);
+      return;
+    }
+    await refFriendReq();
+  };
+
+  const removeFriend = (targetId: string, username: string) => {
+    Alert.alert(
+      'Remove friend',
+      `Remove @${username}? Neither of you will follow each other anymore — you won’t see each other’s posts in Friends until you’re mutual again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              const sb = tryGetSupabase();
+              if (!sb || !user?.id) return;
+              const { error } = await sb.rpc('remove_friendship', { other_id: targetId });
+              if (error) {
+                Alert.alert('Could not remove', error.message);
+                return;
+              }
+              await Promise.all([refFollows(user.id), refresh()]);
+            })();
+          },
+        },
+      ],
+    );
+  };
+
+  const renderPeopleYouFollow = () =>
+    friendProfiles.map((f, idx) => (
+      <View
+        key={f.id}
+        style={[
+          styles.friendManageRow,
+          { borderColor: scheme === 'dark' ? '#2a2a2a' : colors.border, backgroundColor: colors.card },
+        ]}
+      >
+        <View
+          style={[styles.friendAvatar, { backgroundColor: FRIEND_AVATAR_BG[idx % FRIEND_AVATAR_BG.length] }]}
+        >
+          <Text style={styles.friendInitial}>{(f.username || '?').charAt(0).toUpperCase()}</Text>
+        </View>
+        <Text style={[styles.friendName, { color: colors.text1, fontFamily: font.syne, flex: 1 }]} numberOfLines={1}>
+          @{f.username}
+        </Text>
+        <Pressable
+          onPress={() => removeFriend(f.id, f.username)}
+          hitSlop={8}
+          style={({ pressed }) => [styles.removeFriendBtn, { opacity: pressed ? 0.7 : 1 }]}
+        >
+          <Text style={{ fontFamily: font.syne, fontSize: 10, color: colors.text3, fontWeight: '700' }}>remove</Text>
+        </Pressable>
+      </View>
+    ));
+
+  const renderIncomingRequestRows = () =>
+    incoming.map((req) => (
+      <View
+        key={req.id}
+        style={[styles.incomingRow, styles.friendsTabIncomingRow, { borderColor: colors.border2, backgroundColor: colors.card }]}
+      >
+        <Text style={{ fontFamily: font.syne, color: colors.text1, flex: 1 }} numberOfLines={1}>
+          @{req.profile?.username ?? 'user'}
+        </Text>
+        <Text style={{ fontFamily: font.dm, fontSize: 10, color: colors.text3, marginRight: 6 }}>wants to follow you</Text>
+        <Pressable
+          onPress={() => void declineIncomingRequest(req.id)}
+          style={[styles.incomingPill, { borderColor: colors.border2 }]}
+        >
+          <Text style={{ fontFamily: font.syne, fontSize: 10, color: colors.text2 }}>decline</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => void acceptIncomingRequest(req.id)}
+          style={[styles.incomingPill, { backgroundColor: colors.accent, borderColor: colors.accent }]}
+        >
+          <Text
+            style={{
+              fontFamily: font.syne,
+              fontSize: 10,
+              color: scheme === 'light' ? '#fff' : '#0a0a0a',
+            }}
+          >
+            accept
+          </Text>
+        </Pressable>
+      </View>
+    ));
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24, alignItems: 'center' }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPull} tintColor={colors.accent} />}
       >
+        <View style={{ width: '100%', maxWidth: TABLET_CONTENT_MAX }}>
         <View style={styles.feedHeader}>
           <View style={styles.titleRow}>
             <Text style={[styles.feedTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>Feed</Text>
@@ -207,46 +387,59 @@ export default function FeedScreen() {
             </View>
           </View>
         </View>
+
+        {mode === 'friends' && user?.id && incoming.length > 0 ? (
+          <View style={styles.friendsTabTop}>
+            <View style={styles.friendsTabSection}>
+              <Text style={[styles.friendsTabSectionLabel, { color: colors.text3, fontFamily: font.syne }]}>
+                follow requests
+              </Text>
+              {renderIncomingRequestRows()}
+            </View>
+          </View>
+        ) : null}
+
         {!challenge ? (
           chLoad ? (
             <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
           ) : mode === 'friends' ? (
             <>
-              <View style={[styles.friendsEmptyWrap, styles.friendsEmptyNoFriends]}>
-                <View style={[styles.addCard, { borderColor: colors.border2, backgroundColor: colors.card }]}>
-                  <Text style={styles.addIcon}>👥</Text>
-                  <Text style={[styles.addTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
-                    add friends to see their posts
-                  </Text>
-                  <Text style={[styles.addSub, { color: colors.text2, fontFamily: font.dm }]}>
-                    once your friends post, you&apos;ll see their takes here.
-                  </Text>
-                  <Pressable
-                    onPress={() => setSheet(true)}
-                    style={({ pressed }) => [
-                      styles.addFriendsCta,
-                      { backgroundColor: colors.accent, opacity: pressed ? 0.92 : 1 },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.addFriendsCtaText,
-                        { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne },
+              {mutualFriendIds.length === 0 && incoming.length === 0 ? (
+                <View style={[styles.friendsEmptyWrap, styles.friendsEmptyNoFriends]}>
+                  <View style={[styles.addCard, { borderColor: colors.border2, backgroundColor: colors.card }]}>
+                    <Text style={styles.addIcon}>👥</Text>
+                    <Text style={[styles.addTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
+                      add friends to see their posts
+                    </Text>
+                    <Text style={[styles.addSub, { color: colors.text2, fontFamily: font.dm }]}>
+                      you both need to follow each other (send a request and they accept, or vice versa) before posts show
+                      here.
+                    </Text>
+                    <Pressable
+                      onPress={() => setSheet(true)}
+                      style={({ pressed }) => [
+                        styles.addFriendsCta,
+                        { backgroundColor: colors.accent, opacity: pressed ? 0.92 : 1 },
                       ]}
                     >
-                      add friends
-                    </Text>
-                  </Pressable>
+                      <Text
+                        style={[
+                          styles.addFriendsCtaText,
+                          { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne },
+                        ]}
+                      >
+                        add friends
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
+              ) : null}
               <SidekixTabState
                 variant="feed"
                 reason="no-challenge"
                 colors={colors}
                 scheme={scheme}
                 minHeight={Math.max(360, winH - insets.top - 380)}
-                showSkeletonBackdrop
-                feedSkeletonSize="friends"
                 onRetry={() => void refCh()}
               />
             </>
@@ -257,8 +450,6 @@ export default function FeedScreen() {
               colors={colors}
               scheme={scheme}
               minHeight={Math.max(400, winH - insets.top - 120)}
-              showSkeletonBackdrop
-              feedSkeletonSize="campus"
               onRetry={() => void refCh()}
             />
           )
@@ -273,8 +464,6 @@ export default function FeedScreen() {
             colors={colors}
             scheme={scheme}
             minHeight={Math.max(420, winH - insets.top - 100)}
-            showSkeletonBackdrop
-            feedSkeletonSize={mode === 'campus' ? 'campus' : 'friends'}
             onRetry={() => void refresh()}
           />
         ) : (
@@ -336,26 +525,6 @@ export default function FeedScreen() {
               ) : friendProfiles.length > 0 ? (
                 <View style={styles.friendsEmptyWrap}>
                   <Text style={[styles.waitingLabel, { color: colors.text3, fontFamily: font.syne }]}>waiting on</Text>
-                  {friendProfiles.slice(0, 6).map((f, idx) => (
-                    <View
-                      key={f.id}
-                      style={[
-                        styles.friendRow,
-                        { borderColor: scheme === 'dark' ? '#2a2a2a' : colors.border, backgroundColor: colors.card },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.friendAvatar,
-                          { backgroundColor: FRIEND_AVATAR_BG[idx % FRIEND_AVATAR_BG.length] },
-                        ]}
-                      >
-                        <Text style={styles.friendInitial}>{(f.username || '?').charAt(0).toUpperCase()}</Text>
-                      </View>
-                      <Text style={[styles.friendName, { color: colors.text2, fontFamily: font.dm }]}>@{f.username}</Text>
-                      <View style={[styles.pendingDot, { backgroundColor: colors.border2 }]} />
-                    </View>
-                  ))}
                   <Text style={[styles.friendsLine, { color: colors.text2, fontFamily: font.dm }]}>{friendsPendingLine}</Text>
                 </View>
               ) : (
@@ -366,7 +535,7 @@ export default function FeedScreen() {
                       add friends to see their posts
                     </Text>
                     <Text style={[styles.addSub, { color: colors.text2, fontFamily: font.dm }]}>
-                      once your friends post, you&apos;ll see their takes here.
+                      once your friends post, you&apos;ll see their takes here
                     </Text>
                     <Pressable
                       onPress={() => setSheet(true)}
@@ -456,6 +625,29 @@ export default function FeedScreen() {
                 })}
               </View>
             )}
+            {mode === 'friends' && visible.length > 0 ? (
+              <View style={styles.friendsFeedFooter}>
+                <Text style={[styles.friendsFeedFooterText, { color: colors.text2, fontFamily: font.dm }]}>
+                  follow people to see their posts here
+                </Text>
+                <Pressable
+                  onPress={() => setSheet(true)}
+                  style={({ pressed }) => [
+                    styles.friendsFeedFooterBtn,
+                    { borderColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.friendsFeedFooterBtnText,
+                      { color: colors.accent, fontFamily: font.syne },
+                    ]}
+                  >
+                    add friends
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
             {sparseCampusFeed ? (
               <View style={[styles.sparseFoot, { borderColor: colors.border2, backgroundColor: colors.card }]}>
                 <Text style={[styles.sparseFootText, { color: colors.text2, fontFamily: font.dm }]}>
@@ -480,23 +672,25 @@ export default function FeedScreen() {
                 </Pressable>
               </View>
             ) : null}
-            {mode === 'friends' && visible.length > 0 ? (
-              <View style={styles.emptyBox}>
-                <Text style={[styles.feSub, { color: colors.text2, fontFamily: font.dm }]}>
-                  Follow classmates to see their posts here.
-                </Text>
-                <Pressable
-                  onPress={() => setSheet(true)}
-                  style={({ pressed }) => [styles.feBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1 }]}
-                >
-                  <Text style={[styles.feBtnText, { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne }]}>
-                    add friends
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
           </>
         )}
+        {mode === 'friends' && user?.id && mutualFriendIds.length > 0 ? (
+          <View
+            style={[
+              styles.friendsTabBottom,
+              {
+                borderTopColor: colors.border2,
+                borderTopWidth: StyleSheet.hairlineWidth,
+              },
+            ]}
+          >
+            <Text style={[styles.friendsTabSectionLabel, { color: colors.text3, fontFamily: font.syne }]}>
+              friends
+            </Text>
+            {renderPeopleYouFollow()}
+          </View>
+        ) : null}
+        </View>
       </ScrollView>
 
       <Modal visible={sheet} animationType="slide" transparent onRequestClose={() => setSheet(false)}>
@@ -509,10 +703,11 @@ export default function FeedScreen() {
           >
             <View
               style={[styles.sheet, { backgroundColor: colors.bg2, paddingBottom: Math.max(insets.bottom, 20) }]}
-              onStartShouldSetResponder={() => true}
             >
             <Text style={[styles.sheetTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>add friends</Text>
-            <Text style={[styles.sheetSub, { color: colors.text2, fontFamily: font.dm }]}>search by username</Text>
+            <Text style={[styles.sheetSub, { color: colors.text2, fontFamily: font.dm }]}>
+              search by username
+            </Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TextInput
                 value={search}
@@ -536,19 +731,36 @@ export default function FeedScreen() {
               </Pressable>
             </View>
             <ScrollView style={{ maxHeight: 280 }} keyboardShouldPersistTaps="handled">
-              {results.map((r) => (
-                <View key={r.id} style={[styles.contact, { borderBottomColor: colors.border }]}>
-                  <Text style={{ fontFamily: font.syne, color: colors.text1, flex: 1 }}>@{r.username}</Text>
-                  <Pressable
-                    onPress={() => void follow(r.id)}
-                    style={[styles.addBtn, { backgroundColor: colors.accent }]}
-                  >
-                    <Text style={{ fontFamily: font.syne, fontSize: 10, color: scheme === 'light' ? '#fff' : '#0a0a0a' }}>
-                      follow
-                    </Text>
-                  </Pressable>
-                </View>
-              ))}
+              {results.map((r) => {
+                const isMutual = mutualFriendIds.includes(r.id);
+                const isPending = outgoingIds.includes(r.id);
+                return (
+                  <View key={r.id} style={[styles.contact, { borderBottomColor: colors.border }]}>
+                    <Text style={{ fontFamily: font.syne, color: colors.text1, flex: 1 }}>@{r.username}</Text>
+                    {isMutual ? (
+                      <View style={[styles.addBtn, { backgroundColor: colors.bg3, opacity: 0.85 }]}>
+                        <Text style={{ fontFamily: font.syne, fontSize: 10, color: colors.text3 }}>friends</Text>
+                      </View>
+                    ) : isPending ? (
+                      <View style={[styles.addBtn, { backgroundColor: colors.bg3, opacity: 0.85 }]}>
+                        <Text style={{ fontFamily: font.syne, fontSize: 10, color: colors.text3 }}>requested</Text>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => void requestFollow(r.id)}
+                        hitSlop={8}
+                        style={[styles.addBtn, styles.addBtnHit, { backgroundColor: colors.accent }]}
+                      >
+                        <Text
+                          style={{ fontFamily: font.syne, fontSize: 10, color: scheme === 'light' ? '#fff' : '#0a0a0a' }}
+                        >
+                          request
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
             </ScrollView>
             <Pressable onPress={() => setSheet(false)} style={{ marginTop: 12 }}>
               <Text style={{ textAlign: 'center', color: colors.text2, fontFamily: font.syne }}>done</Text>
@@ -570,6 +782,49 @@ const styles = StyleSheet.create({
   toggleWrap: { flexDirection: 'row', borderRadius: 20, padding: 3 },
   tb: { paddingVertical: 5, paddingHorizontal: 11, borderRadius: 16 },
   tbText: { fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', fontWeight: '700' },
+  friendsTabTop: { paddingHorizontal: 18, paddingBottom: 8, width: '100%' },
+  friendsTabBottom: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 12, width: '100%' },
+  friendsTabSection: { width: '100%' },
+  friendsTabSectionLabel: {
+    fontSize: 9,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  friendsTabIncomingRow: {
+    marginBottom: 8,
+    flexWrap: 'wrap',
+  },
+  friendManageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
+    marginBottom: 8,
+  },
+  removeFriendBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  friendsFeedFooter: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 22,
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  friendsFeedFooterText: { fontSize: 12, lineHeight: 18, textAlign: 'center', maxWidth: 300 },
+  friendsFeedFooterBtn: {
+    borderRadius: 20,
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+  },
+  friendsFeedFooterBtnText: { fontSize: 12, fontWeight: '800' },
   promptPad: { paddingHorizontal: 18, paddingVertical: 10 },
   prompt: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 13 },
   fpd: { width: 5, height: 5, borderRadius: 2.5 },
@@ -688,10 +943,6 @@ const styles = StyleSheet.create({
   addSub: { fontSize: 13, lineHeight: 19, marginBottom: 16, textAlign: 'center', maxWidth: 300 },
   addFriendsCta: { alignSelf: 'stretch', borderRadius: 50, paddingVertical: 14, paddingHorizontal: 24 },
   addFriendsCtaText: { fontSize: 14, fontWeight: '800', textAlign: 'center' },
-  emptyBox: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 28, gap: 10 },
-  feSub: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
-  feBtn: { borderRadius: 20, paddingVertical: 9, paddingHorizontal: 20, marginTop: 4 },
-  feBtnText: { fontSize: 12, fontWeight: '800' },
   sheetBackdropDim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.65)',
@@ -706,7 +957,31 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: 17, fontWeight: '800', marginBottom: 6 },
   sheetSub: { fontSize: 12, lineHeight: 18, marginBottom: 16 },
   sheetInput: { borderWidth: 1.5, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, fontSize: 14 },
-  searchGo: { borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center' },
+  searchGo: {
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   contact: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, gap: 10 },
   addBtn: { borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
+  addBtnHit: { minHeight: 36, minWidth: 72, justifyContent: 'center', alignItems: 'center' },
+  incomingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  incomingPill: {
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+  },
 });

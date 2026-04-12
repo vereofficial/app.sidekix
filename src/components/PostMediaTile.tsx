@@ -5,6 +5,8 @@ import { ActivityIndicator, StyleSheet, Text, View, type ViewStyle } from 'react
 import { useAppTheme } from '../context/AppThemeContext';
 import { useReadableStorageUrl } from '../hooks/useReadableStorageUrl';
 import type { PostRow } from '../types/database';
+import { getTextPostPreset } from '../lib/textPostPresets';
+import { textMetricsForLength } from '../lib/textPostTextMetrics';
 import { font, getColors } from '../theme';
 
 export type PostLike = PostRow & { vote_count?: number };
@@ -76,12 +78,19 @@ export function PostMediaTile({
   }
 
   if (cap) {
-    const accentA = resolvedScheme === 'dark' ? 'rgba(212,255,63,0.14)' : 'rgba(90,122,0,0.12)';
-    const accentB = resolvedScheme === 'dark' ? 'rgba(212,255,63,0.04)' : 'rgba(90,122,0,0.05)';
-    const borderC = resolvedScheme === 'dark' ? 'rgba(212,255,63,0.45)' : 'rgba(90,122,0,0.35)';
+    const preset = getTextPostPreset(post.text_style);
+    const isDark = resolvedScheme === 'dark';
+    const stops = isDark ? preset.dark : preset.light;
+    const borderC = isDark ? preset.accentBorderDark : preset.accentBorderLight;
+    const fg = isDark ? preset.textDark : preset.textLight;
+    const glow = isDark ? preset.glowDark : preset.glowLight;
+    const washA = isDark ? 'rgba(212,255,63,0.04)' : 'rgba(90,122,0,0.04)';
+    const washB = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.2)';
+    const metrics = textMetricsForLength(cap.length, compact);
+
     return (
       <LinearGradient
-        colors={resolvedScheme === 'dark' ? ['#0a0a0a', '#141808', '#0d0d0d'] : ['#f8f8f4', '#eef2e4', '#f5f5f0']}
+        colors={[stops[0], stops[1], stops[2]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[
@@ -93,26 +102,45 @@ export function PostMediaTile({
           },
         ]}
       >
-        <View style={[styles.textInner, compact && styles.textInnerCompact]}>
+        {glow ? (
           <LinearGradient
-            colors={[accentA, accentB]}
+            colors={[glow.colors[0], glow.colors[1]]}
+            start={glow.start}
+            end={glow.end}
+            style={StyleSheet.absoluteFillObject}
+          />
+        ) : null}
+        <View style={StyleSheet.absoluteFillObject}>
+          <LinearGradient
+            colors={[washA, washB]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
           />
-          {!compact ? (
-            <Text style={[styles.textQuote, { color: colors.accent, fontFamily: font.syne }]}>sidekix</Text>
-          ) : null}
-          <Text
+          <View
             style={[
-              styles.textBody,
-              compact && styles.textBodyCompact,
-              { color: colors.text1, fontFamily: font.dm },
+              styles.textCenterWrap,
+              compact ? styles.textCenterWrapCompact : null,
             ]}
-            numberOfLines={compact ? 5 : 10}
           >
-            {cap}
-          </Text>
+            <Text
+              style={[
+                {
+                  color: fg,
+                  fontFamily: font.syne,
+                  fontWeight: '700',
+                  textAlign: 'center',
+                  width: '100%',
+                  fontSize: metrics.fontSize,
+                  lineHeight: metrics.lineHeight,
+                  letterSpacing: compact ? 0 : -0.2,
+                },
+              ]}
+              numberOfLines={metrics.maxLines}
+            >
+              {cap}
+            </Text>
+          </View>
         </View>
       </LinearGradient>
     );
@@ -129,35 +157,16 @@ export function PostMediaTile({
 }
 
 const styles = StyleSheet.create({
-  textInner: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    minHeight: 72,
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  textInnerCompact: {
-    paddingVertical: 5,
-    paddingHorizontal: 6,
-    minHeight: 0,
+  textCenterWrap: {
     flex: 1,
-    justifyContent: 'flex-start',
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  textQuote: {
-    fontSize: 9,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-    opacity: 0.95,
-  },
-  textBody: {
-    fontSize: 13,
-    lineHeight: 19,
-    letterSpacing: -0.1,
-  },
-  textBodyCompact: {
-    fontSize: 8,
-    lineHeight: 10,
-    letterSpacing: 0,
+  textCenterWrapCompact: {
+    paddingHorizontal: 5,
+    paddingVertical: 4,
   },
 });

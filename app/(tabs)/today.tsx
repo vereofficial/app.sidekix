@@ -28,6 +28,8 @@ import { tryGetSupabase } from '../../src/lib/supabase';
 import { font, getColors } from '../../src/theme';
 import type { PostRow } from '../../src/types/database';
 
+const TABLET_CONTENT_MAX = 560;
+
 function formatTimeLeftMs(ms: number): string {
   if (ms <= 0) return '0h 0m left';
   const h = Math.floor(ms / 3600000);
@@ -178,6 +180,15 @@ export default function TodayScreen() {
     return t || '—';
   };
 
+  const myPostTodayIsTextOnly = useMemo(() => {
+    if (!myPostToday) return false;
+    return (
+      !myPostToday.image_path?.trim() &&
+      !myPostToday.video_path?.trim() &&
+      Boolean((myPostToday.body ?? myPostToday.caption ?? '').trim())
+    );
+  }, [myPostToday]);
+
   useEffect(() => {
     const load = async () => {
       const ids = [...new Set(recent.map((p) => p.user_id))];
@@ -217,7 +228,7 @@ export default function TodayScreen() {
   const showRecentSection =
     !feedInitialPending && postCount > 0 && !firstPosterOnly && !campusHasPostsOthers;
   /** Recent calendar challenges before today; status = user posted or not. */
-  const pastRowsToShow = useMemo(() => pastChallenges.slice(0, 8), [pastChallenges]);
+  const pastRowsToShow = useMemo(() => pastChallenges.slice(0, 2), [pastChallenges]);
   /** Keep mounted during past-list refetch (rows stay populated; pastListLoad would flash UI off). */
   const showPastSection = pastRowsToShow.length > 0;
 
@@ -295,11 +306,12 @@ export default function TodayScreen() {
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24, alignItems: 'center' }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
+        <View style={{ width: '100%', maxWidth: TABLET_CONTENT_MAX }}>
         <View style={styles.topRow}>
           <Wordmark colors={colors} />
           <View style={[styles.timerPill, { backgroundColor: colors.pillBg, borderColor: colors.border2 }]}>
@@ -359,10 +371,18 @@ export default function TodayScreen() {
                   </Text>
                 </View>
                 <View style={styles.heroCaptionBlock}>
-                  <Text style={[styles.heroCaption, { color: '#fff', fontFamily: font.dm }]} numberOfLines={2}>
-                    {captionPreview(myPostToday)}
-                  </Text>
-                  <Text style={[styles.heroVotes, { color: colors.accent, fontFamily: font.syne }]}>
+                  {!myPostTodayIsTextOnly ? (
+                    <Text style={[styles.heroCaption, { color: '#fff', fontFamily: font.dm }]} numberOfLines={2}>
+                      {captionPreview(myPostToday)}
+                    </Text>
+                  ) : null}
+                  <Text
+                    style={[
+                      styles.heroVotes,
+                      { color: colors.accent, fontFamily: font.syne },
+                      myPostTodayIsTextOnly && { marginTop: 0 },
+                    ]}
+                  >
                     ▲ {reactionsLabel(myVotesOnPost)} so far
                   </Text>
                 </View>
@@ -567,6 +587,7 @@ export default function TodayScreen() {
             })}
           </>
         ) : null}
+        </View>
       </ScrollView>
     </View>
   );

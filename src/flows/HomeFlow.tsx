@@ -36,6 +36,33 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+/** Dev email field — avoid looking like a saved login username. */
+const DEV_EMAIL_INPUT_PROPS = Platform.select({
+  ios: {
+    textContentType: 'none' as const,
+    autoComplete: 'off' as const,
+  },
+  android: {
+    autoComplete: 'off' as const,
+    importantForAutofill: 'noExcludeDescendants' as const,
+  },
+  default: {},
+});
+
+/** Password field: avoid `password` / `newPassword` content types so iOS/Android don’t offer “save password”. */
+const DEV_PASSWORD_INPUT_PROPS = Platform.select({
+  ios: {
+    textContentType: 'none' as const,
+    autoComplete: 'off' as const,
+    passwordRules: '',
+  },
+  android: {
+    autoComplete: 'off' as const,
+    importantForAutofill: 'noExcludeDescendants' as const,
+  },
+  default: {},
+});
+
 type Phase = 'guest' | 'phone' | 'otp' | 'profile' | 'drop';
 
 /** Gradient preset indices for the 4 guest preview tiles when posts are missing. */
@@ -295,8 +322,8 @@ export function HomeFlow() {
     return (
       <KeyboardAvoidingView
         style={[styles.flex, { backgroundColor: colors.bg }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
@@ -353,6 +380,7 @@ export function HomeFlow() {
                   onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))}
                   keyboardType="number-pad"
                   maxLength={6}
+                  textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : undefined}
                   style={[styles.otpInput, { color: colors.text1, fontFamily: font.syneExtra, borderColor: colors.accent }]}
                   placeholder="••••••"
                   placeholderTextColor={colors.text3}
@@ -405,8 +433,10 @@ export function HomeFlow() {
                     borderTopWidth: StyleSheet.hairlineWidth,
                     borderTopColor: colors.border2,
                   }}
+                  {...(Platform.OS === 'android' ? { importantForAutofill: 'noExcludeDescendants' as const } : {})}
                 >
                   <TextInput
+                    {...DEV_EMAIL_INPUT_PROPS}
                     value={devEmail}
                     onChangeText={setDevEmail}
                     autoCapitalize="none"
@@ -420,9 +450,12 @@ export function HomeFlow() {
                     ]}
                   />
                   <TextInput
+                    {...DEV_PASSWORD_INPUT_PROPS}
                     value={devPassword}
                     onChangeText={setDevPassword}
                     secureTextEntry
+                    autoCorrect={false}
+                    spellCheck={false}
                     placeholder="password"
                     placeholderTextColor={colors.text3}
                     style={[
@@ -490,8 +523,8 @@ export function HomeFlow() {
     return (
       <KeyboardAvoidingView
         style={[styles.flex, { backgroundColor: colors.bg }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"

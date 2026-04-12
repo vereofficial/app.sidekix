@@ -4,8 +4,8 @@
     "slug": "sidekix",
     "version": "2.9",
     "orientation": "portrait",
-    "icon": "./assets/app-icon-light.png",
-    "userInterfaceStyle": "automatic",
+    "icon": "./assets/app-icon-dark.png",
+    "userInterfaceStyle": "dark",
     "scheme": "sidekix",
     "newArchEnabled": true,
     "splash": {
@@ -16,10 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vereofficial.vere",
-      "icon": {
-        "light": "./assets/app-icon-light.png",
-        "dark": "./assets/app-icon-dark.png"
-      },
+      "icon": "./assets/app-icon-dark.png",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -27,8 +24,8 @@
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/app-icon-light.png",
-        "backgroundColor": "#F2F1EC"
+        "foregroundImage": "./assets/app-icon-dark.png",
+        "backgroundColor": "#0A0A0A"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false

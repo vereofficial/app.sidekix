@@ -47,16 +47,17 @@ export function useLeaderboard(scope: 'week' | 'all' = 'week') {
     (voteRows ?? []).forEach((v: { post_id: string }) => {
       perPost.set(v.post_id, (perPost.get(v.post_id) ?? 0) + 1);
     });
-    const byUser = new Map<string, { votes: number; topPost: PostRow; topVotes: number }>();
+    /** Posts are newest-first; first row per user = their latest post in the window — use that for share/rank preview art. */
+    const byUser = new Map<string, { votes: number; topPost: PostRow }>();
     for (const p of list) {
       const vc = perPost.get(p.id) ?? 0;
-      const cur = byUser.get(p.user_id) ?? { votes: 0, topPost: p, topVotes: -1 };
-      cur.votes += vc;
-      if (vc > cur.topVotes) {
-        cur.topPost = p;
-        cur.topVotes = vc;
+      const cur = byUser.get(p.user_id);
+      if (!cur) {
+        byUser.set(p.user_id, { votes: vc, topPost: p });
+      } else {
+        cur.votes += vc;
+        byUser.set(p.user_id, cur);
       }
-      byUser.set(p.user_id, cur);
     }
     const userIds = [...byUser.keys()];
     const { data: profs } = await sb.from('profiles').select('id, username, avatar_path').in('id', userIds);

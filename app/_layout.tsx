@@ -14,13 +14,21 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { InteractionManager, Linking, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { AppThemeProvider, useAppTheme } from '../src/context/AppThemeContext';
 import { useStoreRatingPrompt } from '../src/hooks/useStoreRatingPrompt';
-import { initNotificationHandler, scheduleSidequestDropReminder } from '../src/lib/notifications';
+import {
+  attachFriendRequestRealtime,
+  attachSidequestNotificationHandlers,
+  consumeInitialSidequestNotificationIfAny,
+  initNotificationHandler,
+  registerExpoPushTokenForUser,
+  scheduleSidequestDropReminder,
+} from '../src/lib/notifications';
+import { getStoreListingReviewUrl } from '../src/lib/storeListing';
 import { font, getColors } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -28,18 +36,38 @@ SplashScreen.preventAutoHideAsync();
 function NavigationShell() {
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const { visible: rateVisible, onRate, onNotNow } = useStoreRatingPrompt(Boolean(session));
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
     void initNotificationHandler();
+    const detach = attachSidequestNotificationHandlers();
+    return () => detach();
+  }, []);
+
+  const consumedOpenNotifRef = useRef(false);
+  useEffect(() => {
+    if (Platform.OS === 'web' || consumedOpenNotifRef.current) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (consumedOpenNotifRef.current) return;
+      consumedOpenNotifRef.current = true;
+      void consumeInitialSidequestNotificationIfAny();
+    });
+    return () => task.cancel();
   }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web' || !session) return;
     void scheduleSidequestDropReminder();
   }, [session]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !user?.id) return;
+    void registerExpoPushTokenForUser(user.id);
+    const detach = attachFriendRequestRealtime(user.id);
+    return detach;
+  }, [user?.id]);
   const nav = resolvedScheme === 'dark' ? DarkTheme : DefaultTheme;
   const merged = {
     ...nav,
@@ -74,7 +102,8 @@ function NavigationShell() {
           <Pressable style={[rateStyles.card, { backgroundColor: colors.card, borderColor: colors.border2 }]} onPress={(e) => e.stopPropagation()}>
             <Text style={[rateStyles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>enjoying sidekix?</Text>
             <Text style={[rateStyles.sub, { color: colors.text2, fontFamily: font.dm }]}>
-              tap a star to rate on the app store
+              stars here open the system rating sheet when the OS allows it (Apple/Google throttle it, so it may not
+              appear). To write a public review, use the store link below.
             </Text>
             <View style={rateStyles.stars}>
               {[0, 1, 2, 3, 4].map((i) => (
@@ -83,6 +112,23 @@ function NavigationShell() {
                 </Pressable>
               ))}
             </View>
+            {Platform.OS !== 'web' ? (
+              <Pressable
+                onPress={async () => {
+                  try {
+                    await Linking.openURL(getStoreListingReviewUrl());
+                  } catch {
+                    /* ignore */
+                  }
+                  await onNotNow();
+                }}
+                style={rateStyles.writeReview}
+              >
+                <Text style={{ color: colors.accent, fontFamily: font.syne, fontSize: 13, textAlign: 'center' }}>
+                  write a review in the {Platform.OS === 'ios' ? 'app store' : 'play store'}
+                </Text>
+              </Pressable>
+            ) : null}
             <Pressable onPress={onNotNow} style={rateStyles.later}>
               <Text style={{ color: colors.text3, fontFamily: font.syne, fontSize: 12 }}>not now</Text>
             </Pressable>
@@ -108,7 +154,8 @@ const rateStyles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '800', marginBottom: 8, textAlign: 'center' },
   sub: { fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: 18 },
-  stars: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 16 },
+  stars: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 12 },
+  writeReview: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 8, marginBottom: 8 },
   star: { fontSize: 32, lineHeight: 36 },
   later: { alignSelf: 'center', paddingVertical: 8 },
 });

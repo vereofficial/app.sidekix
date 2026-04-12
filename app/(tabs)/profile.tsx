@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -12,6 +13,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   useWindowDimensions,
@@ -30,15 +32,23 @@ import { statSidequestsKey, statReactionsKey } from '../../src/lib/formatCount';
 import { hapticLight } from '../../src/lib/haptics';
 import { font, getColors } from '../../src/theme';
 
+const TABLET_CONTENT_MAX = 640;
+const SUBMISSIONS_GRID_GAP = 8;
+
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { height: winH } = useWindowDimensions();
+  const { height: winH, width: winW } = useWindowDimensions();
   const { resolvedScheme, preference, setPreference } = useAppTheme();
   const colors = getColors(resolvedScheme);
   const scheme = resolvedScheme;
-  const { user, profile, signOut, saveProfile, refreshProfile } = useAuth();
+  const { user, profile, signOut, deleteAccount, setFriendsOnly, saveProfile, refreshProfile } = useAuth();
   const { posts, loading, refresh } = useMyPosts(user?.id);
+  const contentW = Math.min(winW, TABLET_CONTENT_MAX);
+  const submissionTileSize =
+    posts.length >= 3
+      ? Math.max(100, Math.floor((contentW - 36 - SUBMISSIONS_GRID_GAP * 2) / 3))
+      : 140;
   const { displayUri: savedAvatarUrl, onLoadError: onAvatarError } = useReadableStorageUrl(
     profile?.avatar_path ?? null,
   );
@@ -49,6 +59,8 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [avatarMime, setAvatarMime] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [stats, setStats] = useState({ sidequests: 0, reactions: 0, won: 0, streak: 0 });
 
   useEffect(() => {
@@ -188,9 +200,10 @@ export default function ProfileScreen() {
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24, alignItems: 'center' }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPull} tintColor={colors.accent} />}
       >
+        <View style={{ width: '100%', maxWidth: TABLET_CONTENT_MAX }}>
         <View style={styles.header}>
           <View style={styles.top}>
             <Pressable onPress={() => setSheet(true)}>
@@ -285,13 +298,10 @@ export default function ProfileScreen() {
           </View>
 
           <Pressable
-            onPress={async () => {
-              await signOut();
-              router.replace('/');
-            }}
-            style={[styles.signOut, { borderColor: colors.border2 }]}
+            onPress={() => setAccountOpen(true)}
+            style={[styles.accountBtn, { borderColor: colors.border2, backgroundColor: colors.card }]}
           >
-            <Text style={{ color: colors.text2, fontFamily: font.syne, fontWeight: '700' }}>sign out</Text>
+            <Text style={{ color: colors.text2, fontFamily: font.syne, fontWeight: '700' }}>account</Text>
           </Pressable>
         </View>
 
@@ -333,19 +343,126 @@ export default function ProfileScreen() {
             ))}
           </ScrollView>
         ) : (
-          <View style={styles.grid}>
+          <View
+            style={[
+              styles.grid,
+              {
+                paddingHorizontal: 18,
+                columnGap: SUBMISSIONS_GRID_GAP,
+                rowGap: SUBMISSIONS_GRID_GAP,
+                justifyContent: 'flex-start',
+              },
+            ]}
+          >
             {posts.map((p) => (
               <Pressable
                 key={p.id}
                 onPress={() => router.push(`/submission/${p.id}`)}
-                style={styles.cell}
+                style={[
+                  styles.submissionCell,
+                  {
+                    width: submissionTileSize,
+                    height: submissionTileSize,
+                    borderColor: colors.border2,
+                  },
+                ]}
               >
                 <PostMediaTile post={p} style={styles.submissionThumbFill} borderRadius={6} />
               </Pressable>
             ))}
           </View>
         )}
+        </View>
       </ScrollView>
+
+      <Modal visible={accountOpen} animationType="slide" transparent onRequestClose={() => setAccountOpen(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={styles.sheetBackdropDim} onPress={() => setAccountOpen(false)} />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={0}
+            style={{ width: '100%' }}
+          >
+            <View
+              style={[styles.sheet, { backgroundColor: colors.bg2, paddingBottom: Math.max(insets.bottom, 20) }]}
+              onStartShouldSetResponder={() => true}
+            >
+              <Text style={[styles.sheetTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>account</Text>
+              <View style={[styles.accountSheetRow, styles.accountFriendsBlock, { borderColor: colors.border2 }]}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={{ color: colors.text1, fontFamily: font.syne, fontWeight: '700' }}>friends only</Text>
+                  <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 11, marginTop: 5, lineHeight: 15 }}>
+                    When on, only people who follow you can see your posts and your profile.
+                  </Text>
+                </View>
+                <Switch
+                  value={Boolean(profile?.friends_only)}
+                  onValueChange={(v) => {
+                    void (async () => {
+                      const { error } = await setFriendsOnly(v);
+                      if (error) Alert.alert('Could not update', error);
+                    })();
+                  }}
+                  trackColor={{
+                    false: colors.bg3,
+                    true: scheme === 'dark' ? 'rgba(212,255,63,0.35)' : 'rgba(90,122,0,0.35)',
+                  }}
+                  thumbColor={profile?.friends_only ? colors.accent : colors.text3}
+                  ios_backgroundColor={colors.border2}
+                />
+              </View>
+              <Pressable
+                onPress={async () => {
+                  setAccountOpen(false);
+                  await signOut();
+                  router.replace('/');
+                }}
+                style={[styles.accountSheetRow, { borderColor: colors.border2 }]}
+              >
+                <Text style={{ color: colors.text1, fontFamily: font.syne }}>sign out</Text>
+              </Pressable>
+              <Pressable
+                disabled={deleteBusy || busy}
+                onPress={() => {
+                  Alert.alert(
+                    'Delete account',
+                    'This permanently deletes your Sidekix account and data you added in the app. This cannot be undone.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete account',
+                        style: 'destructive',
+                        onPress: () => {
+                          void (async () => {
+                            setAccountOpen(false);
+                            setErr(null);
+                            setDeleteBusy(true);
+                            const { error } = await deleteAccount();
+                            setDeleteBusy(false);
+                            if (error) {
+                              Alert.alert('Could not delete account', error);
+                              return;
+                            }
+                            router.replace('/');
+                          })();
+                        },
+                      },
+                    ],
+                  );
+                }}
+                style={[styles.accountSheetRow, styles.accountSheetDanger, { borderColor: 'rgba(255,80,80,0.35)' }]}
+              >
+                <Text style={{ color: '#f66', fontFamily: font.syne, fontWeight: '700' }}>delete account</Text>
+              </Pressable>
+              <Pressable onPress={() => setAccountOpen(false)}>
+                <Text style={{ textAlign: 'center', color: colors.text2, fontFamily: font.syne, paddingVertical: 12 }}>
+                  close
+                </Text>
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       <Modal visible={sheet} animationType="slide" transparent onRequestClose={() => setSheet(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -459,7 +576,31 @@ const styles = StyleSheet.create({
   themeRow: { flexDirection: 'row', gap: 8, borderRadius: 12, borderWidth: 1, padding: 10, marginBottom: 14 },
   themeChip: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
   themeChipText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
-  signOut: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16, marginBottom: 22 },
+  accountBtn: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    marginBottom: 22,
+  },
+  accountSheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  accountSheetDanger: {
+    marginTop: 4,
+  },
+  accountFriendsBlock: {
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
   sh: { paddingHorizontal: 18, paddingTop: 4, paddingBottom: 8 },
   sectionTitle: { fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase' },
   submissionsRow: {
@@ -478,16 +619,11 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 18,
-    gap: 3,
-    justifyContent: 'space-between',
   },
-  cell: {
-    width: '32%',
-    aspectRatio: 1,
+  submissionCell: {
     borderRadius: 6,
     overflow: 'hidden',
-    marginBottom: 3,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   empty: { paddingHorizontal: 18, paddingVertical: 12, fontSize: 13 },
   submissionsEmptyFlex: { justifyContent: 'center', paddingHorizontal: 22 },

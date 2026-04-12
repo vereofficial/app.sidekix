@@ -12,6 +12,8 @@ export type ProfileRow = {
   username: string;
   display_emoji: string;
   avatar_path?: string | null;
+  /** When true, posts + profile are only visible to followers (see RLS). */
+  friends_only?: boolean | null;
   created_at: string;
 };
 
@@ -24,5 +26,7 @@ export type PostRow = {
   body: string | null;
   is_anonymous: boolean;
   caption: string | null;
+  /** Preset index for text-only cards (0–4). Omitted on older rows / before migration. */
+  text_style?: number | null;
   created_at: string;
 };

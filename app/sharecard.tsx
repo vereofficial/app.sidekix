@@ -1,6 +1,6 @@
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -34,7 +34,13 @@ export default function ShareCardScreen() {
   const scheme = resolvedScheme;
   const { user } = useAuth();
   const { challenge } = useTodayChallenge();
-  const { rows } = useLeaderboard('week');
+  const { rows, refresh: refreshLeaderboard } = useLeaderboard('week');
+  useFocusEffect(
+    useCallback(() => {
+      void refreshLeaderboard();
+    }, [refreshLeaderboard]),
+  );
+
   const myIdx = rows.findIndex((r) => r.user_id === user?.id);
   const you = myIdx >= 0 ? rows[myIdx] : null;
   const rank = myIdx >= 0 ? myIdx + 1 : null;
@@ -102,7 +108,7 @@ export default function ShareCardScreen() {
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 36 }} showsVerticalScrollIndicator={false}>
         <View style={styles.head}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable onPress={() => router.replace('/(tabs)/today')} hitSlop={12}>
             <Text style={{ fontSize: 18, color: colors.text1 }}>←</Text>
           </Pressable>
           <Text style={[styles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>share card</Text>
