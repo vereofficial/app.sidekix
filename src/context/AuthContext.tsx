@@ -1,10 +1,12 @@
 import type { Session, User } from '@supabase/supabase-js';
+import * as WebBrowser from 'expo-web-browser';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { clearChallengeDropDismissed } from '../lib/challengeDropStorage';
 import { insertProfileWithGeneratedUsername } from '../lib/ensureProfileInsert';
 import { tryGetSupabase } from '../lib/supabase';
 import { getSupabasePublicConfig, isSupabaseConfigured } from '../lib/supabaseConfig';
 import { formatAuthError } from '../lib/formatAuthError';
+import { getOAuthRedirectUrl } from '../lib/oauthRedirect';
 import type { ProfileRow } from '../types/database';
 
 type AuthCtx = {
@@ -16,8 +18,8 @@ type AuthCtx = {
   signInWithPhone: (e164Phone: string) => Promise<{ error: string | null }>;
   verifyPhoneOtp: (e164Phone: string, token: string) => Promise<{ error: string | null; profile: ProfileRow | null }>;
   saveProfile: (username: string, emoji?: string, avatarPath?: string | null) => Promise<{ error: string | null }>;
-  /** Email + password via Supabase Auth (enable Email provider in dashboard). */
-  signInWithEmailPassword: (email: string, password: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
+  signInWithApple: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   /** Calls Supabase Edge Function `delete-account` (deploy required). */
   deleteAccount: () => Promise<{ error: string | null }>;
@@ -28,6 +30,7 @@ type AuthCtx = {
 
 const C = createContext<AuthCtx | null>(null);
 const DEV_BYPASS_OTP = '123456';
+WebBrowser.maybeCompleteAuthSession();
 
 function makeDevSession(e164Phone: string): Session {
   const nowSec = Math.floor(Date.now() / 1000);
@@ -211,12 +214,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [session?.user?.id, refreshProfile],
   );
 
-  const signInWithEmailPassword = useCallback(async (email: string, password: string) => {
+  const signInWithOAuthProvider = useCallback(async (provider: 'google' | 'apple') => {
     const sb = tryGetSupabase();
     if (!sb) return { error: 'Not configured' };
-    const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
-    return { error: error ? formatAuthError(error.message) ?? error.message : null };
+
+    const redirectTo = getOAuthRedirectUrl();
+    const { data, error } = await sb.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error || !data?.url) {
+      return { error: formatAuthError(error?.message) ?? error?.message ?? `Could not start ${provider} sign in.` };
+    }
+
+    const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    if (res.type !== 'success' || !res.url) {
+      return { error: res.type === 'cancel' ? null : `${provider} sign in was not completed.` };
+    }
+
+    try {
+      const url = new URL(res.url);
+      const hash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
+      const hashParams = new URLSearchParams(hash);
+      const oauthErr = url.searchParams.get('error') ?? hashParams.get('error');
+      const oauthErrDesc = url.searchParams.get('error_description') ?? hashParams.get('error_description');
+      if (oauthErr || oauthErrDesc) {
+        const msg = oauthErrDesc ?? oauthErr ?? 'OAuth error';
+        return { error: formatAuthError(msg) ?? msg };
+      }
+      const code = url.searchParams.get('code') ?? hashParams.get('code');
+      const accessToken = url.searchParams.get('access_token') ?? hashParams.get('access_token');
+      const refreshToken = url.searchParams.get('refresh_token') ?? hashParams.get('refresh_token');
+
+      /** Implicit flow: prefer tokens in fragment (no PKCE verifier needed on device). */
+      if (accessToken && refreshToken) {
+        const { error: setErr } = await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        return { error: setErr ? formatAuthError(setErr.message) ?? setErr.message : null };
+      }
+      if (code) {
+        const { error: exErr } = await sb.auth.exchangeCodeForSession(code);
+        return { error: exErr ? formatAuthError(exErr.message) ?? exErr.message : null };
+      }
+      return { error: `${provider} sign in did not return a session.` };
+    } catch {
+      return { error: `Could not finish ${provider} sign in.` };
+    }
   }, []);
+
+  const signInWithGoogle = useCallback(async () => signInWithOAuthProvider('google'), [signInWithOAuthProvider]);
+  const signInWithApple = useCallback(async () => signInWithOAuthProvider('apple'), [signInWithOAuthProvider]);
 
   const signOut = useCallback(async () => {
     const sb = tryGetSupabase();
@@ -261,9 +310,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isSupabaseConfigured()) return { error: 'Not configured' };
     const sb = tryGetSupabase();
     if (!sb) return { error: 'Not configured' };
+    await sb.auth.refreshSession().catch(() => {});
     const { data: sessWrap } = await sb.auth.getSession();
     const token = sessWrap.session?.access_token;
     if (!token) return { error: 'Not signed in' };
+
     let url: string;
     let anonKey: string;
     try {
@@ -271,6 +322,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { error: 'Not configured' };
     }
+
+    /** Raw fetch: `functions.invoke` + RN sometimes merge headers in ways the gateway logs as empty `apikey`. */
     const fnUrl = `${url.replace(/\/$/, '')}/functions/v1/delete-account`;
     let res: Response;
     try {
@@ -285,22 +338,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       return { error: e instanceof Error ? e.message : 'Network error' };
     }
-    let body: { error?: string } = {};
-    try {
-      body = (await res.json()) as { error?: string };
-    } catch {
-      /* ignore */
-    }
+
     if (!res.ok) {
+      let body: { error?: string; detail?: string } = {};
+      try {
+        body = (await res.json()) as { error?: string; detail?: string };
+      } catch {
+        /* ignore */
+      }
+      if (res.status === 404) {
+        return {
+          error:
+            'Account deletion is not set up yet (deploy the delete-account Edge Function in Supabase).',
+        };
+      }
+      const baseMsg =
+        typeof body.error === 'string'
+          ? body.error
+          : 'Could not delete account';
+      const detail = typeof body.detail === 'string' ? body.detail : '';
       return {
-        error:
-          typeof body.error === 'string'
-            ? body.error
-            : res.status === 404
-              ? 'Account deletion is not set up yet (deploy the delete-account Edge Function in Supabase).'
-              : 'Could not delete account',
+        error: detail ? `${baseMsg} (${detail.slice(0, 200)})` : baseMsg,
       };
     }
+
     await sb.auth.signOut();
     setSession(null);
     setProfile(null);
@@ -317,7 +378,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithPhone,
       verifyPhoneOtp,
       saveProfile,
-      signInWithEmailPassword,
+      signInWithGoogle,
+      signInWithApple,
       signOut,
       deleteAccount,
       setFriendsOnly,
@@ -331,7 +393,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithPhone,
       verifyPhoneOtp,
       saveProfile,
-      signInWithEmailPassword,
+      signInWithGoogle,
+      signInWithApple,
       signOut,
       deleteAccount,
       setFriendsOnly,

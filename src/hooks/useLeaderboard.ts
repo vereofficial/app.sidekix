@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { startOfWeekIso } from '../lib/week';
+import { weekLocalYmdsContaining } from '../lib/week';
 import { tryGetSupabase } from '../lib/supabase';
 import type { PostRow, ProfileRow } from '../types/database';
 
@@ -25,10 +25,25 @@ export function useLeaderboard(scope: 'week' | 'all' = 'week') {
     }
     setLoading(true);
     setError(null);
-    const since = startOfWeekIso();
-    let q = sb.from('posts').select('*').order('created_at', { ascending: false });
-    if (scope === 'week') q = q.gte('created_at', since);
-    const { data: posts, error: pErr } = await q;
+    let postsQuery = sb.from('posts').select('*').order('created_at', { ascending: false });
+    if (scope === 'week') {
+      const weekDays = weekLocalYmdsContaining();
+      const { data: chRows, error: chErr } = await sb.from('challenges').select('id').in('day', weekDays);
+      if (chErr) {
+        setError(chErr.message);
+        setRows([]);
+        setLoading(false);
+        return;
+      }
+      const challengeIds = [...new Set((chRows ?? []).map((r: { id: string }) => r.id))];
+      if (challengeIds.length === 0) {
+        setRows([]);
+        setLoading(false);
+        return;
+      }
+      postsQuery = postsQuery.in('challenge_id', challengeIds);
+    }
+    const { data: posts, error: pErr } = await postsQuery;
     if (pErr) {
       setError(pErr.message);
       setRows([]);

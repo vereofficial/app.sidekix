@@ -1,6 +1,6 @@
 import { BlurView } from 'expo-blur';
-import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -11,24 +11,20 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   UIManager,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { challengeTag, splitChallengeTitle } from '../challenge';
-import { useAuth } from '../context/AuthContext';
-import { useAppTheme } from '../context/AppThemeContext';
-import { ChallengeDropOverlay } from '../components/ChallengeDropOverlay';
 import { GradientThumb } from '../components/GradientThumb';
 import { PostMediaTile } from '../components/PostMediaTile';
 import { Wordmark } from '../components/Wordmark';
+import { useAuth } from '../context/AuthContext';
+import { useAppTheme } from '../context/AppThemeContext';
 import { usePostCount } from '../hooks/usePostCount';
 import { usePostsForChallenge } from '../hooks/usePostsForChallenge';
 import { useTodayChallenge } from '../hooks/useTodayChallenge';
-import { markChallengeDropDismissed } from '../lib/challengeDropStorage';
 import { hapticMedium } from '../lib/haptics';
 import { font, getColors } from '../theme';
 
@@ -36,66 +32,25 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-/** Dev email field — avoid looking like a saved login username. */
-const DEV_EMAIL_INPUT_PROPS = Platform.select({
-  ios: {
-    textContentType: 'none' as const,
-    autoComplete: 'off' as const,
-  },
-  android: {
-    autoComplete: 'off' as const,
-    importantForAutofill: 'noExcludeDescendants' as const,
-  },
-  default: {},
-});
+type Phase = 'guest' | 'oauth';
 
-/** Password field: avoid `password` / `newPassword` content types so iOS/Android don’t offer “save password”. */
-const DEV_PASSWORD_INPUT_PROPS = Platform.select({
-  ios: {
-    textContentType: 'none' as const,
-    autoComplete: 'off' as const,
-    passwordRules: '',
-  },
-  android: {
-    autoComplete: 'off' as const,
-    importantForAutofill: 'noExcludeDescendants' as const,
-  },
-  default: {},
-});
-
-type Phase = 'guest' | 'phone' | 'otp' | 'profile' | 'drop';
-
-/** Gradient preset indices for the 4 guest preview tiles when posts are missing. */
 const GUEST_PLACEHOLDER_GRADIENTS = [3, 6, 0, 2];
 
-function toE164US(digits: string): string {
-  const d = digits.replace(/\D/g, '');
-  if (d.length !== 10) return '';
-  return `+1${d}`;
-}
-
 export function HomeFlow() {
-  const router = useRouter();
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
   const scheme = resolvedScheme;
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const { signInWithPhone, verifyPhoneOtp, saveProfile, signInWithEmailPassword } = useAuth();
-
-  const [phase, setPhase] = useState<Phase>('guest');
-  const [phoneDigits, setPhoneDigits] = useState('');
-  const [otp, setOtp] = useState('');
-  const [username, setUsername] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [devEmail, setDevEmail] = useState('');
-  const [devPassword, setDevPassword] = useState('');
-
-  const joinScale = useRef(new Animated.Value(1)).current;
+  const { signInWithGoogle, signInWithApple } = useAuth();
   const { challenge, loading: chLoading } = useTodayChallenge();
   const { count: postCount } = usePostCount(challenge?.id ?? null);
   const { posts: recentPosts } = usePostsForChallenge(challenge?.id ?? null, 4, undefined, Boolean(challenge?.id));
+
+  const [phase, setPhase] = useState<Phase>('guest');
+  const [busyProvider, setBusyProvider] = useState<'google' | 'apple' | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const joinScale = useRef(new Animated.Value(1)).current;
 
   const bannerHeadline =
     postCount < 10
@@ -106,59 +61,29 @@ export function HomeFlow() {
   const guestTileWidth = Math.max(0, (windowWidth - 36 - guestGridGap) / 2);
   const guestTileHeight = (guestTileWidth * 4) / 3;
 
-  const e164 = useMemo(() => toE164US(phoneDigits), [phoneDigits]);
-
   const goJoin = () => {
     hapticMedium();
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     Animated.sequence([
       Animated.timing(joinScale, { toValue: 0.94, duration: 90, useNativeDriver: true }),
       Animated.spring(joinScale, { toValue: 1, friction: 5, useNativeDriver: true }),
-    ]).start(() => setPhase('phone'));
+    ]).start(() => setPhase('oauth'));
   };
 
-  const sendCode = async () => {
+  const startGoogle = async () => {
     setFormError(null);
-    if (!e164) {
-      setFormError('Enter a valid 10-digit US number.');
-      return;
-    }
-    setBusy(true);
-    const { error } = await signInWithPhone(e164);
-    setBusy(false);
+    setBusyProvider('google');
+    const { error } = await signInWithGoogle();
+    setBusyProvider(null);
     if (error) setFormError(error);
-    else setPhase('otp');
   };
 
-  const verify = async () => {
+  const startApple = async () => {
     setFormError(null);
-    if (otp.trim().length < 6) {
-      setFormError('Enter the 6-digit code from SMS.');
-      return;
-    }
-    setBusy(true);
-    const { error, profile: row } = await verifyPhoneOtp(e164, otp.trim());
-    setBusy(false);
-    if (error) {
-      setFormError(error);
-      return;
-    }
-    if (!row) setPhase('profile');
-    else setPhase('drop');
-  };
-
-  const completeProfile = async () => {
-    setFormError(null);
-    const u = username.trim().replace(/^@/, '');
-    if (u.length < 3) {
-      setFormError('Pick a username (at least 3 characters).');
-      return;
-    }
-    setBusy(true);
-    const { error } = await saveProfile(u);
-    setBusy(false);
+    setBusyProvider('apple');
+    const { error } = await signInWithApple();
+    setBusyProvider(null);
     if (error) setFormError(error);
-    else setPhase('drop');
   };
 
   if (phase === 'guest') {
@@ -267,9 +192,7 @@ export function HomeFlow() {
               pointerEvents="none"
               intensity={Platform.OS === 'android' ? 100 : 72}
               tint={scheme === 'dark' ? 'dark' : 'light'}
-              experimentalBlurMethod={
-                Platform.OS === 'android' ? 'dimezisBlurView' : undefined
-              }
+              experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
               style={StyleSheet.absoluteFill}
             />
             {Platform.OS === 'ios' ? (
@@ -317,278 +240,89 @@ export function HomeFlow() {
     );
   }
 
-  if (phase === 'phone' || phase === 'otp') {
-    const step = phase === 'phone' ? 1 : 2;
-    return (
-      <KeyboardAvoidingView
-        style={[styles.flex, { backgroundColor: colors.bg }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+  return (
+    <KeyboardAvoidingView
+      style={[styles.flex, { backgroundColor: colors.bg }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}
+    >
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, 28),
+        }}
       >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingTop: insets.top,
-            paddingBottom: Math.max(insets.bottom, 28),
-          }}
-        >
-          <View style={styles.obScrollTop}>
-            <View style={styles.dots}>
-              <View
-                style={[
-                  styles.dot,
-                  { backgroundColor: colors.border2 },
-                  step === 1 && { backgroundColor: colors.accent, width: 18 },
-                ]}
-              />
-              <View
-                style={[
-                  styles.dot,
-                  { backgroundColor: colors.border2 },
-                  step === 2 && { backgroundColor: colors.accent, width: 18 },
-                ]}
-              />
-            </View>
-            {step === 1 ? (
-              <>
-                <Text style={styles.obEmoji}>⚡</Text>
-                <Text style={[styles.obTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
-                  every day at 10am{'\n'}a <Text style={{ color: colors.accent, fontStyle: 'normal' }}>sidequest</Text> drops.
-                </Text>
-                <Text style={[styles.obSub, { color: colors.text2, fontFamily: font.dm }]}>
-                  post your take. see what campus is doing.
-                  {'\n'}
-                  win a weekly prize.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.obEmoji}>📲</Text>
-                <Text style={[styles.obTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>check your texts</Text>
-                <Text
-                  style={[
-                    styles.obSub,
-                    { color: colors.text2, fontFamily: font.dm, marginBottom: 16, paddingBottom: 4 },
-                  ]}
-                >
-                  enter the 6-digit code we sent to {e164 || 'your number'}
-                </Text>
-                <TextInput
-                  value={otp}
-                  onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : undefined}
-                  style={[styles.otpInput, { color: colors.text1, fontFamily: font.syneExtra, borderColor: colors.accent }]}
-                  placeholder="••••••"
-                  placeholderTextColor={colors.text3}
-                />
-              </>
-            )}
-          </View>
-          <View style={styles.obScrollBottom}>
-            {formError ? (
-              <Text style={{ color: '#f66', fontFamily: font.dm, marginBottom: 12, textAlign: 'center', paddingHorizontal: 12 }}>
-                {formError}
-              </Text>
-            ) : null}
-            {step === 1 ? (
-              <>
-                <View style={[styles.phoneWrap, { backgroundColor: colors.card, borderColor: colors.border2 }]}>
-                  <Text style={{ fontSize: 18 }}>🇺🇸</Text>
-                  <TextInput
-                    value={phoneDigits}
-                    onChangeText={(t) => setPhoneDigits(t.replace(/\D/g, '').slice(0, 10))}
-                    keyboardType="phone-pad"
-                    placeholder="5551234567"
-                    placeholderTextColor={colors.text3}
-                    style={[styles.phoneInput, { color: colors.text1, fontFamily: font.syne }]}
-                  />
-                </View>
-                <Pressable
-                  onPress={sendCode}
-                  disabled={busy}
-                  style={({ pressed }) => [
-                    styles.primaryBtn,
-                    { backgroundColor: colors.accent, opacity: pressed || busy ? 0.85 : 1 },
-                  ]}
-                >
-                  {busy ? (
-                    <ActivityIndicator color={scheme === 'light' ? '#fff' : '#0a0a0a'} />
-                  ) : (
-                    <Text style={[styles.primaryBtnText, { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne }]}>
-                      send code →
-                    </Text>
-                  )}
-                </Pressable>
-                <Pressable onPress={() => setPhase('guest')}>
-                  <Text style={[styles.secondaryBtn, { color: colors.text2, fontFamily: font.syne }]}>peek first, sign up later</Text>
-                </Pressable>
-                <View
-                  style={{
-                    marginTop: 22,
-                    paddingTop: 18,
-                    borderTopWidth: StyleSheet.hairlineWidth,
-                    borderTopColor: colors.border2,
-                  }}
-                  {...(Platform.OS === 'android' ? { importantForAutofill: 'noExcludeDescendants' as const } : {})}
-                >
-                  <TextInput
-                    {...DEV_EMAIL_INPUT_PROPS}
-                    value={devEmail}
-                    onChangeText={setDevEmail}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType="email-address"
-                    placeholder="invite@only.com"
-                    placeholderTextColor={colors.text3}
-                    style={[
-                      styles.usernameField,
-                      { marginBottom: 10, backgroundColor: colors.card, borderColor: colors.border2, color: colors.text1 },
-                    ]}
-                  />
-                  <TextInput
-                    {...DEV_PASSWORD_INPUT_PROPS}
-                    value={devPassword}
-                    onChangeText={setDevPassword}
-                    secureTextEntry
-                    autoCorrect={false}
-                    spellCheck={false}
-                    placeholder="password"
-                    placeholderTextColor={colors.text3}
-                    style={[
-                      styles.usernameField,
-                      { marginBottom: 12, backgroundColor: colors.card, borderColor: colors.border2, color: colors.text1 },
-                    ]}
-                  />
-                  <Pressable
-                    onPress={async () => {
-                      setFormError(null);
-                      setBusy(true);
-                      const { error } = await signInWithEmailPassword(devEmail, devPassword);
-                      setBusy(false);
-                      if (error) setFormError(error);
-                    }}
-                    disabled={busy}
-                    style={({ pressed }) => [
-                      styles.primaryBtn,
-                      {
-                        backgroundColor: colors.bg3,
-                        borderWidth: 1,
-                        borderColor: colors.border2,
-                        opacity: pressed || busy ? 0.85 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.primaryBtnText, { color: colors.text1, fontFamily: font.syne }]}>
-                      sign in with email
-                    </Text>
-                  </Pressable>
-                </View>
-              </>
-            ) : (
-              <>
-                <Pressable
-                  onPress={verify}
-                  disabled={busy}
-                  style={({ pressed }) => [
-                    styles.primaryBtn,
-                    { backgroundColor: colors.accent, opacity: pressed || busy ? 0.85 : 1 },
-                  ]}
-                >
-                  {busy ? (
-                    <ActivityIndicator color={scheme === 'light' ? '#fff' : '#0a0a0a'} />
-                  ) : (
-                    <Text style={[styles.primaryBtnText, { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne }]}>
-                      verify →
-                    </Text>
-                  )}
-                </Pressable>
-                <Pressable onPress={() => setPhase('guest')}>
-                  <Text style={[styles.secondaryBtn, { color: colors.text2, fontFamily: font.syne }]}>
-                    peek first, sign up later
-                  </Text>
-                </Pressable>
-              </>
-            )}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    );
-  }
-
-  if (phase === 'profile') {
-    return (
-      <KeyboardAvoidingView
-        style={[styles.flex, { backgroundColor: colors.bg }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingTop: insets.top,
-            paddingBottom: Math.max(insets.bottom, 28),
-            paddingHorizontal: 28,
-            justifyContent: 'center',
-            minHeight: 360,
-          }}
-        >
-          <Text style={[styles.obTitle, { color: colors.text1, fontFamily: font.syneExtra, marginBottom: 8 }]}>
-            claim your handle
+        <View style={styles.obScrollTop}>
+          <Text style={styles.obEmoji}>⚡</Text>
+          <Text style={[styles.obTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
+            every day at 10am{'\n'}a <Text style={{ color: colors.accent, fontStyle: 'normal' }}>sidequest</Text> drops.
           </Text>
-          <Text style={[styles.obSub, { color: colors.text2, fontFamily: font.dm, marginBottom: 20 }]}>
-            we start everyone with a random name — pick something you like, or keep it and change later in the you tab.
+          <Text style={[styles.obSub, { color: colors.text2, fontFamily: font.dm }]}>
+            post your take. see what campus is doing.
+            {'\n'}
+            win a weekly prize.
           </Text>
-          <TextInput
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="wandering_cactus42"
-            placeholderTextColor={colors.text3}
-            style={[
-              styles.usernameField,
-              { backgroundColor: colors.card, borderColor: colors.border2, color: colors.text1, fontFamily: font.dm },
-            ]}
-          />
-          {formError ? <Text style={{ color: '#f66', fontFamily: font.dm, marginBottom: 12 }}>{formError}</Text> : null}
+        </View>
+        <View style={styles.obScrollBottom}>
+          {formError ? (
+            <Text style={{ color: '#f66', fontFamily: font.dm, marginBottom: 12, textAlign: 'center', paddingHorizontal: 12 }}>
+              {formError}
+            </Text>
+          ) : null}
           <Pressable
-            onPress={completeProfile}
-            disabled={busy}
+            onPress={startGoogle}
+            disabled={Boolean(busyProvider)}
             style={({ pressed }) => [
-              styles.primaryBtn,
-              { backgroundColor: colors.accent, opacity: pressed || busy ? 0.85 : 1 },
+              styles.oauthBtn,
+              {
+                borderColor: colors.border2,
+                backgroundColor: colors.card,
+                opacity: pressed || busyProvider ? 0.85 : 1,
+              },
             ]}
           >
-            {busy ? (
-              <ActivityIndicator color={scheme === 'light' ? '#fff' : '#0a0a0a'} />
+            {busyProvider === 'google' ? (
+              <ActivityIndicator color={colors.accent} />
             ) : (
-              <Text style={[styles.primaryBtnText, { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne }]}>
-                continue →
-              </Text>
+              <Text style={[styles.oauthBtnText, { color: colors.text1, fontFamily: font.syne }]}>continue with google</Text>
             )}
           </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    );
-  }
-
-  return (
-    <ChallengeDropOverlay
-      colors={colors}
-      scheme={scheme}
-      insetsTop={insets.top}
-      challenge={challenge}
-      onGo={async () => {
-        await markChallengeDropDismissed();
-        router.replace('/today');
-      }}
-    />
+          {Platform.OS === 'ios' ? (
+            <Pressable
+              onPress={startApple}
+              disabled={Boolean(busyProvider)}
+              style={({ pressed }) => [
+                styles.oauthBtn,
+                {
+                  borderColor: colors.border2,
+                  backgroundColor: scheme === 'dark' ? '#fff' : '#111',
+                  opacity: pressed || busyProvider ? 0.85 : 1,
+                },
+              ]}
+            >
+              {busyProvider === 'apple' ? (
+                <ActivityIndicator color={scheme === 'dark' ? '#0A0A0A' : '#fff'} />
+              ) : (
+                <Text
+                  style={[
+                    styles.oauthBtnText,
+                    { color: scheme === 'dark' ? '#0A0A0A' : '#fff', fontFamily: font.syne },
+                  ]}
+                >
+                  continue with apple
+                </Text>
+              )}
+            </Pressable>
+          ) : null}
+          <Pressable onPress={() => setPhase('guest')}>
+            <Text style={[styles.secondaryBtn, { color: colors.text2, fontFamily: font.syne }]}>peek first, sign up later</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -645,46 +379,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  obScrollBottom: { paddingHorizontal: 24 },
-  dots: { flexDirection: 'row', gap: 6, marginBottom: 20 },
-  dot: { width: 6, height: 6, borderRadius: 3 },
+  obScrollBottom: { paddingHorizontal: 24, gap: 12 },
   obEmoji: { fontSize: 42, marginBottom: 16 },
   obTitle: { fontSize: 24, textAlign: 'center', lineHeight: 28, marginBottom: 10 },
   obSub: { fontSize: 13, textAlign: 'center', lineHeight: 20, marginTop: 8 },
-  phoneWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    width: '100%',
-  },
-  phoneInput: { flex: 1, fontSize: 18, letterSpacing: 0.5, padding: 0 },
-  otpInput: {
-    marginBottom: 16,
-    borderWidth: 2,
-    borderRadius: 14,
+  oauthBtn: {
+    borderRadius: 50,
+    borderWidth: 1,
     paddingVertical: 16,
-    paddingHorizontal: 20,
-    fontSize: 28,
-    letterSpacing: 12,
-    textAlign: 'center',
-    width: '100%',
-    maxWidth: 280,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
   },
-  primaryBtn: { borderRadius: 50, paddingVertical: 16, alignItems: 'center' },
-  primaryBtnText: { fontSize: 15, fontWeight: '800' },
+  oauthBtnText: { fontSize: 15, fontWeight: '800' },
   secondaryBtn: { textAlign: 'center', paddingVertical: 12, marginTop: 4, fontSize: 13, fontWeight: '600' },
-  usernameField: {
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    fontSize: 16,
-    width: '100%',
-  },
 });

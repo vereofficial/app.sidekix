@@ -402,7 +402,16 @@ export default function TodayScreen() {
           >
             {emptyCampus ? (
               <View style={styles.emptyTodayWrap}>
-                <View style={[styles.emptyTodayGlow, { backgroundColor: resolvedScheme === 'dark' ? '#D4FF3F18' : '#5a7a0014' }]} />
+                <LinearGradient
+                  colors={
+                    resolvedScheme === 'dark'
+                      ? ['rgba(212, 255, 63, 0.26)', 'rgba(159, 184, 46, 0.09)', 'rgba(212, 255, 63, 0.18)']
+                      : ['rgba(90, 122, 0, 0.16)', 'rgba(122, 154, 32, 0.06)', 'rgba(90, 122, 0, 0.12)']
+                  }
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={styles.emptyTodayGlow}
+                />
                 <View style={styles.emptyTodayCenter}>
                   {renderChallengeHeading(true)}
                   <Text style={[styles.emptyTodayDeadline, { color: colors.text2, fontFamily: font.dm, marginTop: 14 }]}>
@@ -646,6 +655,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
   },
+  /** Soft oval behind hero copy — same lime→olive axis as ChallengeDropOverlay CTA. */
   emptyTodayGlow: {
     position: 'absolute',
     top: '18%',
@@ -653,6 +663,7 @@ const styles = StyleSheet.create({
     right: '8%',
     height: 240,
     borderRadius: 140,
+    overflow: 'hidden',
   },
   emptyTodayCenter: {
     paddingVertical: 8,

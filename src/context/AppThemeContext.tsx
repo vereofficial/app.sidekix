@@ -15,7 +15,7 @@ const AppThemeContext = createContext<Ctx | null>(null);
 
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const system = useSystemColorScheme();
-  const [preference, setPrefState] = useState<ThemePreference>('dark');
+  const [preference, setPrefState] = useState<ThemePreference>('system');
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {

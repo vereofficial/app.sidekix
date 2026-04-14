@@ -14,6 +14,8 @@ export function getSupabase(): SupabaseClient {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
+        /** Implicit grant: tokens in redirect fragment — avoids iOS PKCE “unable to exchange external code” with custom schemes. */
+        flowType: 'implicit',
       },
     });
   }

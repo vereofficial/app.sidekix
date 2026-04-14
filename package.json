@@ -1,6 +1,6 @@
 {
   "name": "sidekix",
-  "version": "2.9",
+  "version": "2.11",
   "main": "expo-router/entry",
   "scripts": {
     "build": "expo export --platform web",
@@ -10,8 +10,10 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "eas:build:ios": "cross-env EXPO_NO_CAPABILITY_SYNC=1 eas build --platform ios",
-    "eas:build:android": "cross-env EXPO_NO_CAPABILITY_SYNC=1 eas build --platform android"
+    "eas:build:ios": "cross-env EXPO_NO_CAPABILITY_SYNC=1 EAS_BUILD_NO_EXPO_GO_WARNING=true eas build --platform ios --profile production",
+    "eas:build:ios:dev": "cross-env EXPO_NO_CAPABILITY_SYNC=1 EAS_BUILD_NO_EXPO_GO_WARNING=true eas build --platform ios --profile development",
+    "eas:build:ios:preview": "cross-env EXPO_NO_CAPABILITY_SYNC=1 EAS_BUILD_NO_EXPO_GO_WARNING=true eas build --platform ios --profile preview",
+    "eas:build:android": "cross-env EXPO_NO_CAPABILITY_SYNC=1 EAS_BUILD_NO_EXPO_GO_WARNING=true eas build --platform android"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",
@@ -24,6 +26,7 @@
     "expo-blur": "~15.0.8",
     "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.13",
+    "expo-dev-client": "~6.0.20",
     "expo-file-system": "~19.0.21",
     "expo-font": "~14.0.11",
     "expo-haptics": "~15.0.8",
@@ -38,6 +41,7 @@
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-store-review": "~9.0.9",
+    "expo-web-browser": "^55.0.14",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",

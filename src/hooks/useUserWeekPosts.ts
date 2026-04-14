@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { startOfWeekIso } from '../lib/week';
+import { weekLocalYmdsContaining } from '../lib/week';
 import { tryGetSupabase } from '../lib/supabase';
 import type { ChallengeRow, PostRow } from '../types/database';
 
@@ -30,12 +30,27 @@ export function useUserWeekPosts(
     }
     setLoading(true);
     setError(null);
-    const since = startOfWeekIso();
+    const weekDays = weekLocalYmdsContaining();
+    const { data: chRows, error: chErr } = await sb.from('challenges').select('id').in('day', weekDays);
+    if (chErr) {
+      setError(chErr.message);
+      setPosts([]);
+      setMyVoteIds(new Set());
+      setLoading(false);
+      return;
+    }
+    const challengeIds = [...new Set((chRows ?? []).map((r: { id: string }) => r.id))];
+    if (challengeIds.length === 0) {
+      setPosts([]);
+      setMyVoteIds(new Set());
+      setLoading(false);
+      return;
+    }
     const { data: postRows, error: pErr } = await sb
       .from('posts')
       .select('*')
       .eq('user_id', targetUserId)
-      .gte('created_at', since)
+      .in('challenge_id', challengeIds)
       .order('created_at', { ascending: false });
     if (pErr) {
       setError(pErr.message);
@@ -52,9 +67,9 @@ export function useUserWeekPosts(
       return;
     }
     const chIds = [...new Set(list.map((p) => p.challenge_id))];
-    const { data: chRows } = await sb.from('challenges').select('*').in('id', chIds);
+    const { data: chDetailRows } = await sb.from('challenges').select('*').in('id', chIds);
     const chMap = new Map<string, ChallengeRow>();
-    (chRows as ChallengeRow[] | null)?.forEach((c) => chMap.set(c.id, c));
+    (chDetailRows as ChallengeRow[] | null)?.forEach((c) => chMap.set(c.id, c));
     const postIds = list.map((p) => p.id);
     const { data: voteRows } = await sb.from('votes').select('post_id, voter_id').in('post_id', postIds);
     const counts = new Map<string, number>();

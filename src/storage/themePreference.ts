@@ -28,7 +28,7 @@ async function setRaw(value: string): Promise<void> {
 export async function loadThemePreference(): Promise<ThemePreference> {
   const v = await getRaw();
   if (v === 'light' || v === 'dark' || v === 'system') return v;
-  return 'dark';
+  return 'system';
 }
 
 export async function saveThemePreference(pref: ThemePreference): Promise<void> {
