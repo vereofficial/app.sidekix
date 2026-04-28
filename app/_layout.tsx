@@ -15,10 +15,20 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef } from 'react';
-import { InteractionManager, Linking, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  InteractionManager,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { AppThemeProvider, useAppTheme } from '../src/context/AppThemeContext';
+import { useOtaOnLaunch } from '../src/hooks/useOtaOnLaunch';
 import { useStoreRatingPrompt } from '../src/hooks/useStoreRatingPrompt';
 import {
   attachFriendRequestRealtime,
@@ -29,6 +39,7 @@ import {
   scheduleSidequestDropReminder,
 } from '../src/lib/notifications';
 import { getStoreListingReviewUrl } from '../src/lib/storeListing';
+import { WeeklyWinCelebrationHost } from '../src/components/WeeklyWinCelebrationHost';
 import { font, getColors } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -88,12 +99,23 @@ function NavigationShell() {
             headerShown: false,
             contentStyle: { backgroundColor: colors.bg },
             animation: 'slide_from_right',
+            ...(Platform.OS === 'ios'
+              ? {
+                  /** Reduces the light “shadow” strip during edge gestures on some iOS versions. */
+                  fullScreenGestureShadowEnabled: false,
+                }
+              : {}),
           }}
         >
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="upload" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="post-choice" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="new-sidequest" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="new-adventure" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="onboarding" options={{ presentation: 'card', animation: 'fade' }} />
           <Stack.Screen name="sharecard" />
+          <Stack.Screen name="sidequest/[id]" />
           <Stack.Screen name="p/[id]" />
         </Stack>
       </NavThemeProvider>
@@ -102,8 +124,7 @@ function NavigationShell() {
           <Pressable style={[rateStyles.card, { backgroundColor: colors.card, borderColor: colors.border2 }]} onPress={(e) => e.stopPropagation()}>
             <Text style={[rateStyles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>enjoying sidekix?</Text>
             <Text style={[rateStyles.sub, { color: colors.text2, fontFamily: font.dm }]}>
-              stars here open the system rating sheet when the OS allows it (Apple/Google throttle it, so it may not
-              appear). To write a public review, use the store link below.
+              Tap a star to rate the app. You can also leave a public review with the link below.
             </Text>
             <View style={rateStyles.stars}>
               {[0, 1, 2, 3, 4].map((i) => (
@@ -135,6 +156,7 @@ function NavigationShell() {
           </Pressable>
         </Pressable>
       </Modal>
+      <WeeklyWinCelebrationHost />
     </>
   );
 }
@@ -174,6 +196,8 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded || err) SplashScreen.hideAsync();
   }, [loaded, err]);
+
+  useOtaOnLaunch(Boolean(loaded || err));
 
   if (!loaded && !err) return null;
 

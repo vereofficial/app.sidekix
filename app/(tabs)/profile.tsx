@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,8 +24,10 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useAppTheme, type ThemePreference } from '../../src/context/AppThemeContext';
 import { useMyPosts } from '../../src/hooks/useMyPosts';
 import { useReadableStorageUrl } from '../../src/hooks/useReadableStorageUrl';
-import { readLocalUriAsArrayBuffer } from '../../src/lib/readLocalMediaForUpload';
+import { getHomeFeedMode, setHomeFeedMode, type HomeFeedMode } from '../../src/lib/homeFeedPreference';
 import { localCalendarYmd } from '../../src/lib/calendarDate';
+import { readLocalUriAsArrayBuffer } from '../../src/lib/readLocalMediaForUpload';
+import { computeSidequestPostStreak } from '../../src/lib/sidequestPeriod';
 import { tryGetSupabase } from '../../src/lib/supabase';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
 import { statSidequestsKey, statReactionsKey } from '../../src/lib/formatCount';
@@ -62,6 +64,9 @@ export default function ProfileScreen() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [stats, setStats] = useState({ sidequests: 0, reactions: 0, won: 0, streak: 0 });
+  const [homeModePref, setHomeModePref] = useState<HomeFeedMode>('feed');
+  const [calendarCursor, setCalendarCursor] = useState(() => new Date());
+  const [selectedYmd, setSelectedYmd] = useState(() => localCalendarYmd());
 
   useEffect(() => {
     setDraft(profile?.username ?? '');
@@ -70,6 +75,18 @@ export default function ProfileScreen() {
   useEffect(() => {
     setAvatarUri(null);
   }, [profile?.avatar_path]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const m = await getHomeFeedMode(user?.id ?? null);
+      if (!cancelled) setHomeModePref(m);
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -118,17 +135,9 @@ export default function ProfileScreen() {
           won = [...bestByChallenge.values()].filter((r) => r.userId === user.id).length;
         }
 
-        const { data: daysRows } = await sb.from('challenges').select('id,day').in('id', challengeIds);
-        const daySet = new Set((daysRows ?? []).map((r: { day: string }) => r.day));
-        const d = new Date();
-        let run = 0;
-        while (run < 365) {
-          const day = localCalendarYmd(d);
-          if (!daySet.has(day)) break;
-          run += 1;
-          d.setDate(d.getDate() - 1);
-        }
-        streak = run;
+        const { data: chDayRows } = await sb.from('challenges').select('day').in('id', challengeIds);
+        const postedChallengeDays = new Set((chDayRows ?? []).map((r: { day: string }) => r.day));
+        streak = computeSidequestPostStreak(postedChallengeDays);
       }
       setStats({ sidequests, reactions, won, streak });
     };
@@ -171,18 +180,24 @@ export default function ProfileScreen() {
         return;
       }
       const path = `${user.id}/avatar-${Date.now()}.jpg`;
-      const body = await readLocalUriAsArrayBuffer(avatarUri);
-      const contentType = (avatarMime && avatarMime.length > 0 ? avatarMime : null) ?? 'image/jpeg';
-      const { error: upErr } = await sb.storage.from('post-media').upload(path, body, {
-        contentType,
-        upsert: true,
-      });
-      if (upErr) {
+      try {
+        const body = await readLocalUriAsArrayBuffer(avatarUri);
+        const contentType = (avatarMime && avatarMime.length > 0 ? avatarMime : null) ?? 'image/jpeg';
+        const { error: upErr } = await sb.storage.from('post-media').upload(path, body, {
+          contentType,
+          upsert: true,
+        });
+        if (upErr) {
+          setBusy(false);
+          setErr(upErr.message);
+          return;
+        }
+        uploadedAvatarPath = path;
+      } catch (e) {
         setBusy(false);
-        setErr(upErr.message);
+        setErr(e instanceof Error ? e.message : 'Could not read your photo.');
         return;
       }
-      uploadedAvatarPath = path;
     }
     const { error } = await saveProfile(draft.trim(), profile?.display_emoji ?? '🌵', uploadedAvatarPath);
     setBusy(false);
@@ -195,6 +210,38 @@ export default function ProfileScreen() {
   };
 
   const cyclePref = (p: ThemePreference) => setPreference(p);
+
+  const monthMeta = useMemo(() => {
+    const d = new Date(calendarCursor);
+    d.setDate(1);
+    const startDow = d.getDay();
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const ymds: string[] = [];
+    for (let i = 0; i < daysInMonth; i++) {
+      const cur = new Date(d);
+      cur.setDate(d.getDate() + i);
+      ymds.push(localCalendarYmd(cur));
+    }
+    return {
+      label: d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+      startDow,
+      daysInMonth,
+      ymds,
+    };
+  }, [calendarCursor]);
+
+  const postsByYmd = useMemo(() => {
+    const map = new Map<string, typeof posts>();
+    posts.forEach((p) => {
+      const ymd = localCalendarYmd(new Date(p.created_at));
+      const cur = map.get(ymd) ?? [];
+      cur.push(p);
+      map.set(ymd, cur);
+    });
+    return map;
+  }, [posts]);
+
+  const selectedDayPosts = useMemo(() => postsByYmd.get(selectedYmd) ?? [], [postsByYmd, selectedYmd]);
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
@@ -255,7 +302,7 @@ export default function ProfileScreen() {
           <View style={[styles.streakRow, { borderColor: colors.border2, backgroundColor: colors.card }]}>
             <Text style={styles.streakEmoji}>🔥</Text>
             <Text style={[styles.streakHint, { color: colors.text3, fontFamily: font.dm }]}>
-              {stats.streak > 0 ? 'post today to keep it going' : 'post to start your streak'}
+              {stats.streak > 0 ? 'post each sidequest to keep it going' : 'post to start your streak'}
             </Text>
             <View style={[styles.streakPill, { backgroundColor: colors.accent }]}>
               <Text
@@ -296,6 +343,30 @@ export default function ProfileScreen() {
               </Pressable>
             ))}
           </View>
+          <Text style={[styles.sectionLabel, { color: colors.text3, fontFamily: font.syne, marginTop: 14 }]}>default home</Text>
+          <View style={[styles.themeRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {(['feed', 'recent'] as const).map((m) => (
+              <Pressable
+                key={m}
+                onPress={() => {
+                  hapticLight();
+                  setHomeModePref(m);
+                  void setHomeFeedMode(user?.id ?? null, m);
+                }}
+                style={[styles.themeChip, homeModePref === m && { backgroundColor: colors.accent }, { borderColor: colors.border2 }]}
+              >
+                <Text
+                  style={[
+                    styles.themeChipText,
+                    { fontFamily: font.syne },
+                    { color: homeModePref === m ? (scheme === 'light' ? '#fff' : '#0a0a0a') : colors.text2 },
+                  ]}
+                >
+                  {m}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
           <Pressable
             onPress={() => setAccountOpen(true)}
@@ -303,6 +374,65 @@ export default function ProfileScreen() {
           >
             <Text style={{ color: colors.text2, fontFamily: font.syne, fontWeight: '700' }}>account</Text>
           </Pressable>
+        </View>
+
+        <View style={[styles.sh, { marginTop: 8 }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text3, fontFamily: font.syne }]}>calendar</Text>
+        </View>
+        <View style={[styles.calendarWrap, { borderColor: colors.border2, backgroundColor: colors.card }]}>
+          <View style={styles.calendarHead}>
+            <Pressable
+              onPress={() => {
+                const d = new Date(calendarCursor);
+                d.setMonth(d.getMonth() - 1);
+                setCalendarCursor(d);
+              }}
+            >
+              <Text style={{ color: colors.text2, fontFamily: font.syne }}>←</Text>
+            </Pressable>
+            <Text style={{ color: colors.text1, fontFamily: font.syneExtra }}>{monthMeta.label}</Text>
+            <Pressable
+              onPress={() => {
+                const d = new Date(calendarCursor);
+                d.setMonth(d.getMonth() + 1);
+                setCalendarCursor(d);
+              }}
+            >
+              <Text style={{ color: colors.text2, fontFamily: font.syne }}>→</Text>
+            </Pressable>
+          </View>
+          <View style={styles.calendarGrid}>
+            {Array.from({ length: monthMeta.startDow }).map((_, i) => (
+              <View key={`blank-${i}`} style={styles.calendarCell} />
+            ))}
+            {monthMeta.ymds.map((ymd, idx) => {
+              const hasPosts = (postsByYmd.get(ymd)?.length ?? 0) > 0;
+              const isSelected = selectedYmd === ymd;
+              return (
+                <Pressable
+                  key={ymd}
+                  onPress={() => setSelectedYmd(ymd)}
+                  style={[
+                    styles.calendarCell,
+                    isSelected && { backgroundColor: colors.accentMuted, borderRadius: 8 },
+                  ]}
+                >
+                  <Text style={{ color: colors.text1, fontFamily: font.dm, fontSize: 12 }}>{idx + 1}</Text>
+                  {hasPosts ? <View style={[styles.calendarDot, { backgroundColor: colors.accent }]} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={[styles.calendarSelected, { borderTopColor: colors.border2 }]}>
+            <Text style={{ color: colors.text2, fontFamily: font.syne, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.7 }}>
+              {selectedYmd}
+            </Text>
+            <Text style={{ color: colors.text1, fontFamily: font.dm, marginTop: 4 }}>
+              {selectedDayPosts.length === 0
+                ? 'no sidequests completed'
+                : `${selectedDayPosts.length} ${selectedDayPosts.length === 1 ? 'sidequest' : 'sidequests'} completed`}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.sh}>
@@ -603,6 +733,40 @@ const styles = StyleSheet.create({
   },
   sh: { paddingHorizontal: 18, paddingTop: 4, paddingBottom: 8 },
   sectionTitle: { fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase' },
+  calendarWrap: {
+    marginHorizontal: 18,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
+  },
+  calendarHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 2,
+  },
+  calendarSelected: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
   submissionsRow: {
     paddingHorizontal: 18,
     gap: 10,

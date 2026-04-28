@@ -22,22 +22,26 @@ import { challengeTag, splitChallengeTitle } from '../../src/challenge';
 import { useAuth } from '../../src/context/AuthContext';
 import { useAppTheme } from '../../src/context/AppThemeContext';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
+import { PostMediaViewerModal } from '../../src/components/PostMediaViewerModal';
 import { SidekixTabState } from '../../src/components/SidekixTabState';
 import { useFollows } from '../../src/hooks/useFollows';
 import { useFriendRequests } from '../../src/hooks/useFriendRequests';
 import { usePostsForChallenge } from '../../src/hooks/usePostsForChallenge';
+import { useSidequestFeed } from '../../src/hooks/useSidequestFeed';
 import { useTodayChallenge } from '../../src/hooks/useTodayChallenge';
 import { usePostedToday } from '../../src/hooks/usePostedToday';
-import { postsLabel } from '../../src/lib/formatCount';
+import { postsFeedCountLine } from '../../src/lib/formatCount';
+import { getHomeFeedMode, setHomeFeedMode } from '../../src/lib/homeFeedPreference';
 import { hapticLight } from '../../src/lib/haptics';
 import { sharePostLink } from '../../src/lib/sharePost';
 import { tryGetSupabase } from '../../src/lib/supabase';
-import type { ProfileRow } from '../../src/types/database';
+import type { PostRow, ProfileRow } from '../../src/types/database';
 import { font, getColors } from '../../src/theme';
 
 const TABLET_CONTENT_MAX = 560;
 
 const FRIEND_AVATAR_BG = ['#6B4E3D', '#2D7A7A', '#6B4FA3', '#B85C5C', '#4A6FA5'];
+const SIDEQUEST_CATEGORIES = ['food/drink', 'outdoor', 'social', 'trend', 'creative', 'chaotic'] as const;
 
 function friendDisplayFirst(u: string): string {
   const base = (u.split('_')[0] || u).toLowerCase();
@@ -61,6 +65,9 @@ export default function FeedScreen() {
   );
   const { followingIds, followerIds, refresh: refFollows } = useFollows();
   const { incoming, outgoingIds, refresh: refFriendReq } = useFriendRequests(user?.id);
+  const [homeMode, setHomeMode] = useState<'feed' | 'recent'>('feed');
+  const [activeCats, setActiveCats] = useState<string[]>([]);
+  const { rows: sidequests, loading: sidequestsLoading, refresh: refreshSidequests } = useSidequestFeed(activeCats);
   const postedToday = usePostedToday(user?.id);
   const [mode, setMode] = useState<'campus' | 'friends'>('campus');
   const [sheet, setSheet] = useState(false);
@@ -69,6 +76,7 @@ export default function FeedScreen() {
   const [friendProfiles, setFriendProfiles] = useState<ProfileRow[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [usernames, setUsernames] = useState<Record<string, string>>({});
+  const [viewerPost, setViewerPost] = useState<PostRow | null>(null);
 
   useEffect(() => {
     void refFollows(user?.id);
@@ -122,6 +130,9 @@ export default function FeedScreen() {
   }, [mode, posts, mutualFriendIds]);
 
   const sparseCampusFeed = mode === 'campus' && visible.length > 0 && visible.length <= 3;
+  /** Few posts today — hide exact reaction totals on tiles (same rule as Today / past sidequests). */
+  const hidePublicCounts = posts.length < 10;
+  const campusFeedCountLine = postsFeedCountLine(posts.length);
 
   const friendsPendingLine = useMemo(() => {
     if (friendProfiles.length === 0) return '';
@@ -129,6 +140,26 @@ export default function FeedScreen() {
     if (friendProfiles.length === 1) return `${first} hasn't posted yet.`;
     return `${first} and ${friendProfiles.length - 1} others haven't posted yet.`;
   }, [friendProfiles]);
+
+  const toggleCategory = (category: string) =>
+    setActiveCats((prev) => (prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]));
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadMode = async () => {
+      const m = await getHomeFeedMode(user?.id ?? null);
+      if (!cancelled) setHomeMode(m);
+    };
+    void loadMode();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const chooseHomeMode = (next: 'feed' | 'recent') => {
+    setHomeMode(next);
+    void setHomeFeedMode(user?.id ?? null, next);
+  };
 
   const onVote = useCallback(
     async (postId: string, currently: boolean) => {
@@ -147,7 +178,7 @@ export default function FeedScreen() {
 
   const onPull = async () => {
     setRefreshing(true);
-    await Promise.all([refCh(), refresh(), refFollows(user?.id), refFriendReq()]);
+    await Promise.all([refCh(), refresh(), refFollows(user?.id), refFriendReq(), refreshSidequests()]);
     setRefreshing(false);
   };
 
@@ -354,12 +385,35 @@ export default function FeedScreen() {
         <View style={{ width: '100%', maxWidth: TABLET_CONTENT_MAX }}>
         <View style={styles.feedHeader}>
           <View style={styles.titleRow}>
-            <Text style={[styles.feedTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>Feed</Text>
+            <Text style={[styles.feedTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>SIDEKIX</Text>
             <View style={[styles.toggleWrap, { backgroundColor: colors.pillBg }]}>
-              <Pressable
-                onPress={() => setMode('campus')}
-                style={[styles.tb, mode === 'campus' && { backgroundColor: colors.accent }]}
-              >
+              <Pressable onPress={() => chooseHomeMode('feed')} style={[styles.tb, homeMode === 'feed' && { backgroundColor: colors.accent }]}>
+                <Text
+                  style={[
+                    styles.tbText,
+                    { fontFamily: font.syne },
+                    { color: homeMode === 'feed' ? (scheme === 'light' ? '#fff' : '#0A0A0A') : colors.text3 },
+                  ]}
+                >
+                  Feed
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => chooseHomeMode('recent')} style={[styles.tb, homeMode === 'recent' && { backgroundColor: colors.accent }]}>
+                <Text
+                  style={[
+                    styles.tbText,
+                    { fontFamily: font.syne },
+                    { color: homeMode === 'recent' ? (scheme === 'light' ? '#fff' : '#0A0A0A') : colors.text3 },
+                  ]}
+                >
+                  Recent
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+          {homeMode === 'recent' ? (
+            <View style={[styles.toggleWrap, { backgroundColor: colors.pillBg, marginTop: 10 }]}>
+              <Pressable onPress={() => setMode('campus')} style={[styles.tb, mode === 'campus' && { backgroundColor: colors.accent }]}>
                 <Text
                   style={[
                     styles.tbText,
@@ -370,10 +424,7 @@ export default function FeedScreen() {
                   Campus
                 </Text>
               </Pressable>
-              <Pressable
-                onPress={() => setMode('friends')}
-                style={[styles.tb, mode === 'friends' && { backgroundColor: colors.accent }]}
-              >
+              <Pressable onPress={() => setMode('friends')} style={[styles.tb, mode === 'friends' && { backgroundColor: colors.accent }]}>
                 <Text
                   style={[
                     styles.tbText,
@@ -385,10 +436,79 @@ export default function FeedScreen() {
                 </Text>
               </Pressable>
             </View>
-          </View>
+          ) : null}
         </View>
 
-        {mode === 'friends' && user?.id && incoming.length > 0 ? (
+        {homeMode === 'feed' ? (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catFilterRow}>
+              {SIDEQUEST_CATEGORIES.map((cat) => (
+                <Pressable
+                  key={cat}
+                  onPress={() => toggleCategory(cat)}
+                  style={[
+                    styles.catFilterChip,
+                    { borderColor: colors.border2, backgroundColor: activeCats.includes(cat) ? colors.accentMuted : colors.card },
+                  ]}
+                >
+                  <Text style={{ color: colors.text2, fontFamily: font.syne, fontSize: 11 }}>{cat}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            {sidequestsLoading ? (
+              <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
+            ) : (
+              <View style={styles.sidequestListWrap}>
+                {sidequests.map((sq) => (
+                  <Pressable
+                    key={sq.id}
+                    onPress={() => router.push(`/sidequest/${sq.id}`)}
+                    style={({ pressed }) => [
+                      styles.sidequestCard,
+                      { borderColor: colors.border2, backgroundColor: colors.card, opacity: pressed ? 0.94 : 1 },
+                    ]}
+                  >
+                    <View style={styles.sidequestHead}>
+                      <Text style={{ color: colors.text3, fontFamily: font.syne, fontSize: 10 }}>
+                        created by {sq.creator_username === 'anonymous' ? 'anonymous' : `@${sq.creator_username}`}
+                      </Text>
+                      <Text style={{ color: colors.text3 }}>→</Text>
+                    </View>
+                    <Text style={[styles.sidequestTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>{sq.title}</Text>
+                    <View style={styles.sidequestTags}>
+                      {(sq.categories ?? []).slice(0, 3).map((c) => (
+                        <View key={c} style={[styles.sidequestTag, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}>
+                          <Text style={{ color: colors.text2, fontSize: 10, fontFamily: font.syne }}>{c}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <View style={styles.previewRow}>
+                      {sq.preview_posts.map((p) => (
+                        <View key={p.id} style={styles.previewTile}>
+                          <PostMediaTile
+                            post={{
+                              ...p,
+                              challenge_id: 'sidequest',
+                              caption: p.body,
+                              text_style: null,
+                            }}
+                            style={styles.previewTile}
+                            borderRadius={8}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 12, marginTop: 6 }}>
+                      {sq.completion_count} {sq.completion_count === 1 ? 'adventure' : 'adventures'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </>
+        ) : null}
+
+        {homeMode === 'recent' && mode === 'friends' && user?.id && incoming.length > 0 ? (
           <View style={styles.friendsTabTop}>
             <View style={styles.friendsTabSection}>
               <Text style={[styles.friendsTabSectionLabel, { color: colors.text3, fontFamily: font.syne }]}>
@@ -399,7 +519,8 @@ export default function FeedScreen() {
           </View>
         ) : null}
 
-        {!challenge ? (
+        {homeMode === 'recent' ? (
+          !challenge ? (
           chLoad ? (
             <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
           ) : mode === 'friends' ? (
@@ -485,9 +606,11 @@ export default function FeedScreen() {
                       );
                     })()}
                   </Text>
-                  <Text style={[styles.fpc, { color: colors.text3, fontFamily: font.dm }]}>
-                    {postsLabel(posts.length)}
-                  </Text>
+                  {campusFeedCountLine != null ? (
+                    <Text style={[styles.fpc, { color: colors.text3, fontFamily: font.dm }]}>
+                      {campusFeedCountLine}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             ) : null}
@@ -502,7 +625,7 @@ export default function FeedScreen() {
                       no one&apos;s gone{'\n'}first yet.
                     </Text>
                     <Text style={[styles.emptyHeroSub, { color: colors.text2, fontFamily: font.dm }]}>
-                      today&apos;s challenge just dropped. your post could be the first thing people see.
+                      this sidequest just went live — your post could be the first thing people see.
                     </Text>
                     <Pressable
                       onPress={() => challenge && router.push('/upload')}
@@ -517,7 +640,7 @@ export default function FeedScreen() {
                           { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne },
                         ]}
                       >
-                        add today&apos;s post →
+                        add your take →
                       </Text>
                     </Pressable>
                   </View>
@@ -570,11 +693,13 @@ export default function FeedScreen() {
                   return (
                     <View key={c.id} style={[styles.card, sparseCampusFeed && styles.cardSparse]}>
                       <View style={{ width: '100%', aspectRatio: 3 / 4, borderRadius: 12, overflow: 'hidden' }}>
-                        <PostMediaTile post={c} style={StyleSheet.absoluteFillObject} borderRadius={12} />
-                        <LinearGradient
-                          colors={['transparent', 'rgba(0,0,0,0.82)']}
-                          style={styles.cardFade}
-                        />
+                        <Pressable onPress={() => setViewerPost(c)} style={StyleSheet.absoluteFillObject}>
+                          <PostMediaTile post={c} style={StyleSheet.absoluteFillObject} borderRadius={12} />
+                          <LinearGradient
+                            colors={['transparent', 'rgba(0,0,0,0.82)']}
+                            style={styles.cardFade}
+                          />
+                        </Pressable>
                         <Pressable
                           onPress={() => void sharePostLink(c.id)}
                           style={styles.sharePill}
@@ -602,17 +727,23 @@ export default function FeedScreen() {
                           >
                             ▲
                           </Text>
-                          <Text
-                            style={[
-                              styles.fuCount,
-                              {
-                                color: voted ? (scheme === 'light' ? '#253100' : colors.accent) : 'rgba(255,255,255,0.5)',
-                                fontFamily: font.syne,
-                              },
-                            ]}
-                          >
-                            {c.vote_count}
-                          </Text>
+                          {!hidePublicCounts ? (
+                            <Text
+                              style={[
+                                styles.fuCount,
+                                {
+                                  color: voted
+                                    ? scheme === 'light'
+                                      ? '#253100'
+                                      : colors.accent
+                                    : 'rgba(255,255,255,0.5)',
+                                  fontFamily: font.syne,
+                                },
+                              ]}
+                            >
+                              {c.vote_count}
+                            </Text>
+                          ) : null}
                         </Pressable>
                         <View style={styles.fco}>
                           <Text style={[styles.fcu, { fontFamily: font.syne }, c.is_anonymous && { color: '#aaa' }]}>
@@ -654,7 +785,7 @@ export default function FeedScreen() {
                   {posts.length <= 1
                     ? postedToday
                       ? 'Campus is still waking up — cheer people on with reactions.'
-                      : 'Campus is quiet — your post could set the tone today.'
+                      : 'Campus is quiet — your post could set the tone.'
                     : postedToday
                       ? 'Still early — hang out and vote for your favorites.'
                       : 'Still early — add a take or see what lands next.'}
@@ -667,14 +798,15 @@ export default function FeedScreen() {
                   ]}
                 >
                   <Text style={[styles.sparseFootBtnText, { color: colors.accent, fontFamily: font.syne }]}>
-                    {postedToday ? 'back to today →' : "add today's post →"}
+                    {postedToday ? 'back to today →' : 'add your take →'}
                   </Text>
                 </Pressable>
               </View>
             ) : null}
           </>
-        )}
-        {mode === 'friends' && user?.id && mutualFriendIds.length > 0 ? (
+        )
+        ) : null}
+        {homeMode === 'recent' && mode === 'friends' && user?.id && mutualFriendIds.length > 0 ? (
           <View
             style={[
               styles.friendsTabBottom,
@@ -692,6 +824,16 @@ export default function FeedScreen() {
         ) : null}
         </View>
       </ScrollView>
+
+      <Pressable
+        onPress={() => router.push('/post-choice')}
+        style={({ pressed }) => [
+          styles.fabPost,
+          { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1, bottom: Math.max(insets.bottom, 12) + 8 },
+        ]}
+      >
+        <Text style={{ color: resolvedScheme === 'light' ? '#fff' : '#0A0A0A', fontSize: 22, fontFamily: font.syneExtra }}>+</Text>
+      </Pressable>
 
       <Modal visible={sheet} animationType="slide" transparent onRequestClose={() => setSheet(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -769,6 +911,7 @@ export default function FeedScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+      <PostMediaViewerModal post={viewerPost} visible={Boolean(viewerPost)} onClose={() => setViewerPost(null)} />
     </View>
   );
 }
@@ -779,6 +922,16 @@ const styles = StyleSheet.create({
   feedHeader: { paddingHorizontal: 18, paddingTop: 12 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   feedTitle: { fontSize: 23, letterSpacing: -0.35 },
+  catFilterRow: { paddingHorizontal: 18, gap: 8, paddingBottom: 8 },
+  catFilterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  sidequestListWrap: { paddingHorizontal: 18, paddingBottom: 16, gap: 10 },
+  sidequestCard: { borderWidth: 1, borderRadius: 14, padding: 12 },
+  sidequestHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sidequestTitle: { fontSize: 18, lineHeight: 24, marginTop: 6 },
+  sidequestTags: { marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  sidequestTag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
+  previewRow: { marginTop: 10, flexDirection: 'row', gap: 6 },
+  previewTile: { width: 54, height: 54, borderRadius: 8, overflow: 'hidden' },
   toggleWrap: { flexDirection: 'row', borderRadius: 20, padding: 3 },
   tb: { paddingVertical: 5, paddingHorizontal: 11, borderRadius: 16 },
   tbText: { fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', fontWeight: '700' },
@@ -983,5 +1136,19 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
+  },
+  fabPost: {
+    position: 'absolute',
+    right: 16,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
 });

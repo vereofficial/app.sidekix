@@ -35,7 +35,8 @@ export async function getReadablePostMediaUrl(path: string): Promise<string | nu
     data: { session },
   } = await sb.auth.getSession();
   if (session) {
-    const signed = await sb.storage.from('post-media').createSignedUrl(trimmed, 3600);
+    /** Longer TTL avoids mid-session playback failures and URI churn in Video remounts. */
+    const signed = await sb.storage.from('post-media').createSignedUrl(trimmed, 60 * 60 * 24);
     if (!signed.error && signed.data?.signedUrl) {
       return signed.data.signedUrl;
     }

@@ -33,7 +33,7 @@ export function hapticChallengeDropBurst() {
 }
 
 /**
- * Distinct pattern when the 10am sidequest notification fires (foreground).
+ * Distinct pattern when a sidequest drop notification fires (foreground).
  * Custom notification sounds require bundling audio in native projects; see Expo Notifications docs.
  */
 export function hapticSidequestDropAlarm() {

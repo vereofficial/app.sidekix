@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ChallengeRow } from '../types/database';
-import { localCalendarYmd } from '../lib/calendarDate';
+import { activeChallengeDayYmd } from '../lib/sidequestPeriod';
 import { tryGetSupabase } from '../lib/supabase';
 
 export function useTodayChallenge() {
@@ -18,7 +18,7 @@ export function useTodayChallenge() {
     }
     setLoading(true);
     setError(null);
-    const day = localCalendarYmd();
+    const day = activeChallengeDayYmd();
     const { data, error: qErr } = await sb
       .from('challenges')
       .select('*')

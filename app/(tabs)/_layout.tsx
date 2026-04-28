@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DailyChallengeDrop } from '../../src/components/DailyChallengeDrop';
 import { useAppTheme } from '../../src/context/AppThemeContext';
@@ -12,7 +13,7 @@ export default function TabLayout() {
   const bottomPad = Math.max(insets.bottom, 12);
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -67,6 +68,6 @@ export default function TabLayout() {
       />
     </Tabs>
     <DailyChallengeDrop />
-    </>
+    </View>
   );
 }

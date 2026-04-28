@@ -2,14 +2,14 @@
   "expo": {
     "name": "Sidekix",
     "slug": "sidekix",
-    "version": "2.11",
+    "version": "3.0",
     "orientation": "portrait",
     "icon": "./assets/lightning-logo.png",
     "userInterfaceStyle": "automatic",
     "scheme": "sidekix",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/lightning-logo.png",
+      "image": "./assets/splash-bolt-transparent.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -28,7 +28,10 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -42,6 +45,14 @@
       "eas": {
         "projectId": "b24544a7-290a-4248-b34e-e50df0e24568"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b24544a7-290a-4248-b34e-e50df0e24568",
+      "checkAutomatically": "NEVER",
+      "fallbackToCacheTimeout": 0
     }
   }
 }

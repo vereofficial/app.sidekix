@@ -32,6 +32,17 @@ const C = createContext<AuthCtx | null>(null);
 const DEV_BYPASS_OTP = '123456';
 WebBrowser.maybeCompleteAuthSession();
 
+/** Stale AsyncStorage session (revoked server-side, rotated project, etc.) — clear local tokens without spamming errors. */
+function shouldClearStoredSession(err: { message?: string; code?: string }): boolean {
+  const m = err.message ?? '';
+  const c = err.code ?? '';
+  return (
+    c === 'refresh_token_not_found' ||
+    m.includes('Invalid Refresh Token') ||
+    m.includes('Refresh Token Not Found')
+  );
+}
+
 function makeDevSession(e164Phone: string): Session {
   const nowSec = Math.floor(Date.now() / 1000);
   const devUser = {
@@ -106,12 +117,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
 
-    sb.auth.getSession().then(({ data: { session: s } }) => {
-      if (!cancelled) {
-        setSession(s);
+    void (async () => {
+      try {
+        const { data: sessWrap, error: sessErr } = await sb.auth.getSession();
+        if (cancelled) return;
+        if (sessErr && shouldClearStoredSession(sessErr)) {
+          await sb.auth.signOut({ scope: 'local' });
+          setSession(null);
+          setAuthLoading(false);
+          return;
+        }
+        setSession(sessWrap.session);
         setAuthLoading(false);
+      } catch {
+        await sb.auth.signOut({ scope: 'local' }).catch(() => {});
+        if (!cancelled) {
+          setSession(null);
+          setAuthLoading(false);
+        }
       }
-    });
+    })();
 
     const { data: sub } = sb.auth.onAuthStateChange((event, s) => {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {

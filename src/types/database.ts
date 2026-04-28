@@ -30,3 +30,23 @@ export type PostRow = {
   text_style?: number | null;
   created_at: string;
 };
+
+export type SidequestRow = {
+  id: string;
+  creator_id: string;
+  title: string;
+  categories: string[];
+  is_anonymous: boolean;
+  created_at: string;
+};
+
+export type SidequestPostRow = {
+  id: string;
+  sidequest_id: string;
+  user_id: string;
+  body: string | null;
+  image_path: string | null;
+  video_path: string | null;
+  is_anonymous: boolean;
+  created_at: string;
+};

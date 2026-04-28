@@ -13,15 +13,22 @@ import {
   NOTIF_SIDEQUEST_TITLE,
   notifFriendAcceptedBody,
   notifFriendRequestBody,
+  notifLeaderboardRankBody,
   notifReactionMilestoneBody,
+  notifWeeklyPlacementBody,
+  notifWeeklyWinBody,
+  notifWeeklyWinTitle,
 } from './notificationMessages';
 import { tryGetSupabase } from './supabase';
 import { hapticLight, hapticSidequestDropAlarm } from './haptics';
 
 const ANDROID_CHANNEL = 'sidekix-default';
 
-/** Match `identifier` in scheduleNotificationAsync — used when handling taps. */
+/** @deprecated Legacy daily id — cancelled when scheduling Mon/Fri drops. */
 export const SIDEQUEST_10AM_ID = 'sidekix-sidequest-10am';
+
+export const SIDEQUEST_WEEKDAY_10AM_ID = 'sidekix-sidequest-weekday-10am';
+export const SIDEQUEST_WEEKEND_10AM_ID = 'sidekix-sidequest-weekend-10am';
 
 export const SIDEQUEST_NOTIFICATION_DATA = { kind: 'sidequest_drop' as const };
 
@@ -48,9 +55,11 @@ export async function initNotificationHandler() {
   }
 }
 
-function dailyTenAmTrigger(): Notifications.DailyTriggerInput {
+/** Expo: weekday 1 = Sunday … Monday = 2, Friday = 6, Saturday = 7. */
+function weeklyTenAmTrigger(weekday: number): Notifications.WeeklyTriggerInput {
   return {
-    type: Notifications.SchedulableTriggerInputTypes.DAILY,
+    type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+    weekday,
     hour: 10,
     minute: 0,
     channelId: Platform.OS === 'android' ? ANDROID_CHANNEL : undefined,
@@ -75,14 +84,26 @@ async function openTodayForSidequestDrop() {
   }
 }
 
+async function openLeadTab() {
+  try {
+    router.replace('/(tabs)/lead');
+  } catch {
+    /* router may not be ready */
+  }
+}
+
 function isSidequestNotification(request: Notifications.NotificationRequest): boolean {
   const d = request.content.data as { kind?: string } | undefined;
-  return request.identifier === SIDEQUEST_10AM_ID || d?.kind === 'sidequest_drop';
+  if (d?.kind === 'sidequest_drop') return true;
+  const id = request.identifier;
+  return (
+    id === SIDEQUEST_10AM_ID || id === SIDEQUEST_WEEKDAY_10AM_ID || id === SIDEQUEST_WEEKEND_10AM_ID
+  );
 }
 
 /**
  * Call once after initNotificationHandler. Returns cleanup.
- * Customize 10am copy in `src/lib/notificationMessages.ts`.
+ * Customize sidequest drop copy in `src/lib/notificationMessages.ts`.
  */
 export function attachSidequestNotificationHandlers(): () => void {
   if (Platform.OS === 'web') return () => {};
@@ -102,6 +123,15 @@ export function attachSidequestNotificationHandlers(): () => void {
     const d = req.content.data as { kind?: string } | undefined;
     if (d?.kind === 'friend_request' || d?.kind === 'friend_accept') {
       void openFeedTab();
+      return;
+    }
+    if (d?.kind === 'leaderboard_rank') {
+      void openLeadTab();
+      return;
+    }
+    if (d?.kind === 'weekly_win' || d?.kind === 'weekly_placement') {
+      void openLeadTab();
+      return;
     }
   });
 
@@ -125,6 +155,15 @@ export async function consumeInitialSidequestNotificationIfAny(): Promise<void> 
     const d = req.content.data as { kind?: string } | undefined;
     if (d?.kind === 'friend_request' || d?.kind === 'friend_accept') {
       await openFeedTab();
+      return;
+    }
+    if (d?.kind === 'leaderboard_rank') {
+      await openLeadTab();
+      return;
+    }
+    if (d?.kind === 'weekly_win' || d?.kind === 'weekly_placement') {
+      await openLeadTab();
+      return;
     }
   } catch {
     /* ignore */
@@ -144,16 +183,25 @@ export async function scheduleSidequestDropReminder() {
   if (final !== 'granted') return;
 
   await Notifications.cancelScheduledNotificationAsync(SIDEQUEST_10AM_ID).catch(() => {});
+  await Notifications.cancelScheduledNotificationAsync(SIDEQUEST_WEEKDAY_10AM_ID).catch(() => {});
+  await Notifications.cancelScheduledNotificationAsync(SIDEQUEST_WEEKEND_10AM_ID).catch(() => {});
+
+  const content = {
+    title: NOTIF_SIDEQUEST_TITLE,
+    body: NOTIF_SIDEQUEST_BODY,
+    sound: Platform.OS === 'ios' ? 'default' : undefined,
+    data: { ...SIDEQUEST_NOTIFICATION_DATA },
+  };
 
   await Notifications.scheduleNotificationAsync({
-    identifier: SIDEQUEST_10AM_ID,
-    content: {
-      title: NOTIF_SIDEQUEST_TITLE,
-      body: NOTIF_SIDEQUEST_BODY,
-      sound: Platform.OS === 'ios' ? 'default' : undefined,
-      data: { ...SIDEQUEST_NOTIFICATION_DATA },
-    },
-    trigger: dailyTenAmTrigger(),
+    identifier: SIDEQUEST_WEEKDAY_10AM_ID,
+    content,
+    trigger: weeklyTenAmTrigger(2),
+  });
+  await Notifications.scheduleNotificationAsync({
+    identifier: SIDEQUEST_WEEKEND_10AM_ID,
+    content,
+    trigger: weeklyTenAmTrigger(6),
   });
 }
 
@@ -164,6 +212,62 @@ export async function notifyReactionMilestone(total: number, milestone: number) 
     content: {
       title: NOTIF_REACTION_TITLE,
       body: notifReactionMilestoneBody(milestone),
+    },
+    trigger: null,
+  });
+}
+
+export async function presentLeaderboardRankNotification(userId: string, place: 1 | 2 | 3): Promise<void> {
+  if (Platform.OS === 'web') return;
+  if (!(await socialNotificationsEnabled(userId))) return;
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') return;
+  void hapticLight();
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: NOTIF_REACTION_TITLE,
+      body: notifLeaderboardRankBody(place),
+      sound: Platform.OS === 'ios' ? 'default' : undefined,
+      data: { kind: 'leaderboard_rank', place },
+      ...(Platform.OS === 'android' ? { android: { channelId: ANDROID_CHANNEL } } : {}),
+    },
+    trigger: null,
+  });
+}
+
+export type WeeklyWinNotifVariant = 'prize' | 'first_no_pool' | 'first_need_reactions';
+
+export async function presentWeeklyWinNotification(userId: string, variant: WeeklyWinNotifVariant): Promise<void> {
+  if (Platform.OS === 'web') return;
+  if (!(await socialNotificationsEnabled(userId))) return;
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') return;
+  void hapticLight();
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: notifWeeklyWinTitle,
+      body: notifWeeklyWinBody(variant),
+      sound: Platform.OS === 'ios' ? 'default' : undefined,
+      data: { kind: 'weekly_win', variant },
+      ...(Platform.OS === 'android' ? { android: { channelId: ANDROID_CHANNEL } } : {}),
+    },
+    trigger: null,
+  });
+}
+
+export async function presentWeeklyPlacementNotification(userId: string, rank: number): Promise<void> {
+  if (Platform.OS === 'web') return;
+  if (!(await socialNotificationsEnabled(userId))) return;
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') return;
+  void hapticLight();
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: notifWeeklyWinTitle,
+      body: notifWeeklyPlacementBody(rank),
+      sound: Platform.OS === 'ios' ? 'default' : undefined,
+      data: { kind: 'weekly_placement', rank },
+      ...(Platform.OS === 'android' ? { android: { channelId: ANDROID_CHANNEL } } : {}),
     },
     trigger: null,
   });

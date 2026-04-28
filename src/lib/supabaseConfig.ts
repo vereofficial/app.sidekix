@@ -6,8 +6,17 @@ type Extra = {
 };
 
 function readExtra(): Extra {
-  const e = Constants.expoConfig?.extra as Extra | undefined;
-  return e ?? {};
+  const fromExpo = (Constants.expoConfig?.extra ?? {}) as Extra;
+  const manifest2 = Constants.manifest2 as { extra?: { expoClient?: { extra?: Extra } } } | null;
+  const fromM2 = manifest2?.extra?.expoClient?.extra ?? {};
+  const legacy = (Constants.manifest as { extra?: Extra } | null)?.extra ?? {};
+  const merged = { ...legacy, ...fromM2, ...fromExpo };
+  // Fallback: EXPO_PUBLIC_* is inlined into the JS bundle at Metro bundle time (EAS Build / EAS Update).
+  // Store builds that missed `extra` in the embedded manifest can still get keys from an OTA update
+  // when those env vars are set for the update job.
+  const supabaseUrl = merged.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = merged.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  return { supabaseUrl, supabaseAnonKey };
 }
 
 export function isSupabaseConfigured(): boolean {

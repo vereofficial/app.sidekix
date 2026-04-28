@@ -30,7 +30,7 @@ export async function clearChallengeDropDismissed(): Promise<void> {
   }
 }
 
-/** After opening the 10am notification: show the drop animation on next Today evaluate. Consumed once. */
+/** After opening a sidequest drop notification: show the drop animation on next Today evaluate. Consumed once. */
 export async function requestChallengeDropForceReveal(): Promise<void> {
   try {
     await SecureStore.setItemAsync(FORCE_KEY, '1');

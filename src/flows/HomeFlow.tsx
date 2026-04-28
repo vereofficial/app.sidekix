@@ -54,8 +54,8 @@ export function HomeFlow() {
 
   const bannerHeadline =
     postCount < 10
-      ? 'Be one of the first to post today'
-      : `${postCount} ${postCount === 1 ? 'person has' : 'people have'} posted today`;
+      ? 'Be one of the first to post this sidequest'
+      : `${postCount} ${postCount === 1 ? 'person has' : 'people have'} posted this sidequest`;
 
   const guestGridGap = 7;
   const guestTileWidth = Math.max(0, (windowWidth - 36 - guestGridGap) / 2);
@@ -117,7 +117,7 @@ export function HomeFlow() {
               </>
             ) : (
               <Text style={[styles.challengeTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
-                No sidequest for today yet
+                No sidequest loaded yet
               </Text>
             )}
           </View>
@@ -258,7 +258,9 @@ export function HomeFlow() {
         <View style={styles.obScrollTop}>
           <Text style={styles.obEmoji}>⚡</Text>
           <Text style={[styles.obTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
-            every day at 10am{'\n'}a <Text style={{ color: colors.accent, fontStyle: 'normal' }}>sidequest</Text> drops.
+            every <Text style={{ color: colors.accent, fontStyle: 'normal' }}>mon & fri</Text> at{' '}
+            <Text style={{ color: colors.accent, fontStyle: 'normal' }}>10am</Text> a new{' '}
+            <Text style={{ color: colors.accent, fontStyle: 'normal' }}>sidequest</Text> drops.
           </Text>
           <Text style={[styles.obSub, { color: colors.text2, fontFamily: font.dm }]}>
             post your take. see what campus is doing.

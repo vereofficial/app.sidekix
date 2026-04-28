@@ -137,7 +137,7 @@ export default function LeaderWeekUserScreen() {
                   </View>
                   <View style={styles.row}>
                     <Text style={[styles.vc, { color: colors.text2, fontFamily: font.dm }]}>
-                      ▲ {p.vote_count} {p.is_today_challenge ? 'this sidequest' : 'that day'}
+                      ▲ {p.vote_count} {p.is_today_challenge ? 'this challenge' : 'that day'}
                     </Text>
                     {canVote ? (
                       <Pressable

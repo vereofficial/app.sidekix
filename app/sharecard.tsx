@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,16 +15,43 @@ import {
 import { splitChallengeTitle } from '../src/challenge';
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as FileSystem from 'expo-file-system/legacy';
 import { PostMediaTile } from '../src/components/PostMediaTile';
 import { useAppTheme } from '../src/context/AppThemeContext';
 import { useAuth } from '../src/context/AuthContext';
 import { useLeaderboard } from '../src/hooks/useLeaderboard';
+import { useReadableStorageUrl } from '../src/hooks/useReadableStorageUrl';
 import { useTodayChallenge } from '../src/hooks/useTodayChallenge';
 import { reactionsLabel } from '../src/lib/formatCount';
 import { hapticLight } from '../src/lib/haptics';
 import { font, getColors } from '../src/theme';
 
 type CardFormat = 'square' | 'vertical' | 'transparent';
+type FfmpegBridge = {
+  FFmpegKit: { execute: (command: string) => Promise<{ getReturnCode: () => Promise<unknown> }> };
+  ReturnCode: { isSuccess: (rc: unknown) => boolean };
+};
+
+function escapeFfmpegText(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/:/g, '\\:')
+    .replace(/'/g, "\\'")
+    .replace(/%/g, '\\%')
+    .replace(/\n/g, ' ');
+}
+
+function getFfmpegBridge(): FfmpegBridge | null {
+  // ffmpeg-kit upstream iOS binaries were retired; use fallback sharing on iOS.
+  if (Platform.OS === 'ios') return null;
+  try {
+    const mod = require('ffmpeg-kit-react-native') as Partial<FfmpegBridge>;
+    if (mod?.FFmpegKit && mod?.ReturnCode) return mod as FfmpegBridge;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export default function ShareCardScreen() {
   const router = useRouter();
@@ -49,13 +77,16 @@ export default function ShareCardScreen() {
   const [format, setFormat] = useState<CardFormat>('vertical');
   const [sharing, setSharing] = useState(false);
   const shotRef = useRef<View>(null);
+  const topVideoPath = you?.top_post?.video_path ?? null;
+  const topVideo = useReadableStorageUrl(topVideoPath);
+  const isTopPostVideo = Boolean(topVideoPath?.trim());
 
   const previewW = Math.min(winW - 36, 340);
   const aspect = format === 'square' ? 1 : 9 / 16;
   const previewH = previewW / aspect;
 
   const challengeLine = useMemo(() => {
-    if (!challenge) return 'This week on sidequest';
+    if (!challenge) return 'This week on the challenge';
     const { before, after } = splitChallengeTitle(challenge);
     const t = `${before}${challenge.emphasis}${after}`.replace(/\s+/g, ' ').trim();
     return t.length > 120 ? `${t.slice(0, 117)}…` : t;
@@ -66,35 +97,83 @@ export default function ShareCardScreen() {
       Alert.alert('Share card', 'Only the top 10 this week can export a rank card.');
       return;
     }
-    const node = shotRef.current;
-    if (!node) return;
     setSharing(true);
     try {
       hapticLight();
-      const outW = 1080;
-      const outH = format === 'square' ? 1080 : Math.round((outW * 16) / 9);
-      const uri = await captureRef(node, {
-        format: 'png',
-        quality: 1,
-        width: outW,
-        height: outH,
-      });
       const can = await Sharing.isAvailableAsync();
       if (!can) {
         Alert.alert('Sharing', 'Sharing is not available on this device.');
         return;
       }
-      await Sharing.shareAsync(uri, {
-        mimeType: 'image/png',
-        dialogTitle: 'Share your rank',
-      });
+      if (isTopPostVideo) {
+        const src = topVideo.displayUri;
+        if (!src) {
+          Alert.alert('Share', 'Video is still loading. Try again in a second.');
+          return;
+        }
+        const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+        if (!cacheDir) {
+          Alert.alert('Share', 'Could not access local storage for video export.');
+          return;
+        }
+        const inputPath = `${cacheDir}share-rank-src-${you.user_id}-${Date.now()}.mp4`;
+        const outputPath = `${cacheDir}share-rank-final-${you.user_id}-${Date.now()}.mp4`;
+        const dl = await FileSystem.downloadAsync(src, inputPath);
+        const ffmpeg = getFfmpegBridge();
+        if (!ffmpeg) {
+          await Sharing.shareAsync(dl.uri, {
+            mimeType: 'video/mp4',
+            dialogTitle: 'Share your video',
+          });
+          return;
+        }
+
+        const title = escapeFfmpegText(rank ? `#${rank} this week` : 'challenge');
+        const votes = escapeFfmpegText(`▲ ${reactionsLabel(you.vote_total)}`);
+        const challengeText = escapeFfmpegText(challengeLine);
+        const brand = escapeFfmpegText('sidequest.app');
+        const filter =
+          [
+            "drawbox=x=0:y=ih*0.72:w=iw:h=ih*0.28:color=black@0.50:t=fill",
+            `drawtext=text='${title}':fontcolor=white:fontsize=h*0.075:x=w*0.05:y=h*0.75`,
+            `drawtext=text='${votes}':fontcolor=0xD4FF3F:fontsize=h*0.048:x=w*0.05:y=h*0.83`,
+            `drawtext=text='${challengeText}':fontcolor=white:fontsize=h*0.038:x=w*0.05:y=h*0.89`,
+            `drawtext=text='${brand}':fontcolor=white@0.70:fontsize=h*0.032:x=w*0.05:y=h*0.945`,
+          ].join(',');
+        const cmd = `-y -i "${dl.uri}" -vf "${filter}" -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -c:a aac -movflags +faststart "${outputPath}"`;
+        const session = await ffmpeg.FFmpegKit.execute(cmd);
+        const rc = await session.getReturnCode();
+        if (!ffmpeg.ReturnCode.isSuccess(rc)) {
+          throw new Error('Could not prepare labeled video');
+        }
+
+        await Sharing.shareAsync(outputPath, {
+          mimeType: 'video/mp4',
+          dialogTitle: 'Share your video',
+        });
+      } else {
+        const node = shotRef.current;
+        if (!node) return;
+        const outW = 1080;
+        const outH = format === 'square' ? 1080 : Math.round((outW * 16) / 9);
+        const uri = await captureRef(node, {
+          format: 'png',
+          quality: 1,
+          width: outW,
+          height: outH,
+        });
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: 'Share your rank',
+        });
+      }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Could not create image';
+      const msg = e instanceof Error ? e.message : 'Could not prepare share';
       Alert.alert('Share', msg);
     } finally {
       setSharing(false);
     }
-  }, [format, inTop10, rank, you]);
+  }, [format, inTop10, isTopPostVideo, rank, topVideo.displayUri, you]);
 
   const cardBg =
     format === 'transparent' ? 'transparent' : scheme === 'dark' ? '#0a0a0a' : '#0f0f0f';
@@ -167,9 +246,11 @@ export default function ShareCardScreen() {
           >
             {you?.top_post ? (
               <PostMediaTile
+                key={`${you.top_post.id}-${format}`}
                 post={you.top_post}
                 style={StyleSheet.absoluteFillObject}
                 borderRadius={format === 'square' ? 12 : 16}
+                autoPlayVideo
               />
             ) : (
               <View style={[styles.ph, { backgroundColor: colors.bg3 }]} />
@@ -177,7 +258,7 @@ export default function ShareCardScreen() {
             <LinearGradient colors={fadeColors} style={styles.cardFade} pointerEvents="none" />
             <View style={styles.cardCopy} pointerEvents="none">
               <Text style={[styles.cardRank, { fontFamily: font.syneExtra, color: format === 'transparent' ? '#fff' : '#fff' }]}>
-                {rank ? `#${rank} this week` : 'sidequest'}
+                {rank ? `#${rank} this week` : 'challenge'}
               </Text>
               <Text style={[styles.cardVotes, { fontFamily: font.dm, color: '#D4FF3F' }]}>
                 {you ? `▲ ${reactionsLabel(you.vote_total)}` : '—'}
@@ -207,7 +288,7 @@ export default function ShareCardScreen() {
               { fontFamily: font.syne, color: inTop10 ? (scheme === 'light' ? '#fff' : '#0a0a0a') : colors.text3 },
             ]}
           >
-            {inTop10 ? 'share image…' : 'top 10 only'}
+            {inTop10 ? (isTopPostVideo ? 'share video…' : 'share image…') : 'top 10 only'}
           </Text>
         </Pressable>
       </ScrollView>

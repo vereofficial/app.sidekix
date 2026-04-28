@@ -23,7 +23,7 @@ type Props = {
 function copyFor(variant: 'today' | 'feed'): { title: string; sub: string } {
   if (variant === 'today') {
     return {
-      title: "today's sidequest isn't here yet.",
+      title: "this sidequest isn't here yet.",
       sub: 'check your connection or try again in a moment.',
     };
   }

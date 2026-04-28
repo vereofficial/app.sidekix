@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,7 @@ import { useTodayChallenge } from '../src/hooks/useTodayChallenge';
 import { hapticHeavy, hapticSuccess } from '../src/lib/haptics';
 import { tryGetSupabase } from '../src/lib/supabase';
 import { MAX_POST_CAPTION_CHARS } from '../src/constants/postText';
+import { prepareVideoForUpload } from '../src/lib/prepareVideoForUpload';
 import { readLocalUriAsArrayBuffer } from '../src/lib/readLocalMediaForUpload';
 import { TextPostPresetSwatch } from '../src/components/TextPostPresetSwatch';
 import { TEXT_POST_PRESETS, clampTextPostStyle } from '../src/lib/textPostPresets';
@@ -34,6 +35,7 @@ import { font, getColors } from '../src/theme';
 const MAX_VIDEO_MS = 10_000;
 
 type CaptureMode = 'camera' | 'photo' | 'video' | 'text';
+type UploadPhase = 'idle' | 'reading' | 'uploading' | 'saving';
 
 export default function UploadScreen() {
   const router = useRouter();
@@ -52,19 +54,40 @@ export default function UploadScreen() {
   const [localUri, setLocalUri] = useState<string | null>(null);
   /** Picker-reported MIME; avoids wrong `contentType` when uploading bytes. */
   const [localMime, setLocalMime] = useState<string | null>(null);
+  /** Bytes when ImagePicker provides `fileSize` (avoids expo-file-system getInfoAsync, which throws on the non-legacy import in SDK 54). */
+  const [localFileBytes, setLocalFileBytes] = useState<number | null>(null);
   const [textBody, setTextBody] = useState('');
   const [textStyle, setTextStyle] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<UploadPhase>('idle');
+  const [uploadEstimateSec, setUploadEstimateSec] = useState<number | null>(null);
+  const [uploadElapsedSec, setUploadElapsedSec] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const setModeAndClear = (m: CaptureMode) => {
     setMode(m);
     setLocalUri(null);
     setLocalMime(null);
+    setLocalFileBytes(null);
     if (m !== 'text') {
       setTextBody('');
       setTextStyle(0);
     }
   };
+
+  useEffect(() => {
+    if (!busy || uploadPhase !== 'uploading') return;
+    const startedAt = Date.now();
+    const t = setInterval(() => {
+      const elapsed = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+      setUploadElapsedSec(elapsed);
+      if (uploadEstimateSec && uploadEstimateSec > 0) {
+        const ratio = Math.min(0.95, elapsed / uploadEstimateSec);
+        setUploadProgress((prev) => Math.max(prev, ratio));
+      }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [busy, uploadPhase, uploadEstimateSec]);
 
   const pick = async (fromCamera: boolean, media: 'image' | 'video') => {
     const perm = fromCamera
@@ -78,7 +101,18 @@ export default function UploadScreen() {
     const res = await fn({
       mediaTypes: media === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
       videoMaxDuration: 10,
-      quality: 0.85,
+      ...(media === 'video'
+        ? Platform.OS === 'ios'
+          ? {
+              /**
+               * Capped 1080p H.264 from Photos — good quality, hardware-friendly decode, smaller than Passthrough.
+               * Passthrough (full-res HEVC) + many feed tiles was crashing iOS from decoder/memory pressure.
+               */
+              videoExportPreset: ImagePicker.VideoExportPreset.H264_1920x1080,
+              videoQuality: ImagePicker.UIImagePickerControllerQualityType.High,
+            }
+          : { videoExportPreset: ImagePicker.VideoExportPreset.HighestQuality }
+        : { quality: 0.92 }),
     });
     if (res.canceled || !res.assets[0]) return;
     const a = res.assets[0];
@@ -88,6 +122,8 @@ export default function UploadScreen() {
     }
     setLocalUri(a.uri);
     setLocalMime(a.mimeType ?? null);
+    const fs = a.fileSize;
+    setLocalFileBytes(typeof fs === 'number' && fs > 0 ? fs : null);
   };
 
   const onPreviewPress = () => {
@@ -99,7 +135,7 @@ export default function UploadScreen() {
   const submit = async () => {
     const sb = tryGetSupabase();
     if (!sb || !user?.id || !challenge) {
-      Alert.alert('Missing', 'Sign in and ensure today’s challenge exists.');
+      Alert.alert('Missing', 'Sign in and ensure a sidequest is available.');
       return;
     }
 
@@ -116,6 +152,10 @@ export default function UploadScreen() {
 
     Keyboard.dismiss();
     setBusy(true);
+    setUploadPhase(mode === 'text' ? 'saving' : 'reading');
+    setUploadEstimateSec(null);
+    setUploadElapsedSec(0);
+    setUploadProgress(0);
     try {
       const baseRow: {
         challenge_id: string;
@@ -139,20 +179,52 @@ export default function UploadScreen() {
         const uri = localUri;
         if (!uri) return;
         const isVid = mode === 'video';
-        const ext = isVid ? 'mp4' : 'jpg';
+        const fileBytes = localFileBytes;
+        const estimatedSec =
+          fileBytes != null
+            ? Math.max(4, Math.ceil(fileBytes / (isVid ? 1_200_000 : 2_000_000)))
+            : isVid
+              ? 12
+              : 6;
+        setUploadEstimateSec(estimatedSec);
+        /** Passthrough videos can stay QuickTime `.mov`; mislabeling as `.mp4` hurts decoding. */
+        const videoExt =
+          /\.mov$/i.test(uri) || localMime?.toLowerCase().includes('quicktime')
+            ? 'mov'
+            : 'mp4';
+        const ext = isVid ? videoExt : 'jpg';
         const path = `${user.id}/${Date.now()}.${ext}`;
-        const body = await readLocalUriAsArrayBuffer(uri);
+        setUploadPhase('reading');
+        let readUri = uri;
+        let videoCleanup: (() => Promise<void>) | undefined;
+        if (isVid) {
+          const prepared = await prepareVideoForUpload(uri);
+          readUri = prepared.uri;
+          videoCleanup = prepared.cleanup;
+        }
+        let body: ArrayBuffer;
+        try {
+          body = await readLocalUriAsArrayBuffer(readUri);
+        } finally {
+          await videoCleanup?.();
+        }
+        setUploadPhase('uploading');
         const contentType =
-          (localMime && localMime.length > 0 ? localMime : null) ?? (isVid ? 'video/mp4' : 'image/jpeg');
+          (localMime && localMime.length > 0 ? localMime : null) ??
+          (isVid ? (ext === 'mov' ? 'video/quicktime' : 'video/mp4') : 'image/jpeg');
         const { error: upErr } = await sb.storage.from('post-media').upload(path, body, {
           contentType,
           upsert: true,
         });
         if (upErr) throw upErr;
+        setUploadProgress(1);
+        setUploadPhase('saving');
         if (isVid) baseRow.video_path = path;
         else baseRow.image_path = path;
       }
 
+      setUploadPhase('saving');
+      setUploadProgress((prev) => Math.max(prev, 0.97));
       const { error: insErr } = await sb.from('posts').insert(baseRow);
       if (insErr) throw insErr;
       await refCh();
@@ -175,13 +247,14 @@ export default function UploadScreen() {
       Alert.alert('Upload', msg);
     } finally {
       setBusy(false);
+      setUploadPhase('idle');
     }
   };
 
   const canSubmit =
     mode === 'text' ? textBody.trim().length > 0 : Boolean(localUri);
 
-  const quote = challenge ? challenge.title : 'No challenge for today';
+  const quote = challenge ? challenge.title : 'No sidequest loaded';
 
   if (postedToday && challenge) {
     return (
@@ -190,15 +263,15 @@ export default function UploadScreen() {
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Text style={{ fontSize: 18, color: colors.text1 }}>←</Text>
           </Pressable>
-          <Text style={[styles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>today&apos;s sidequest</Text>
+          <Text style={[styles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>this sidequest</Text>
         </View>
         <View style={{ paddingHorizontal: 28, paddingTop: 32, gap: 12 }}>
           <Text style={{ fontSize: 42, textAlign: 'center' }}>✓</Text>
           <Text style={[styles.doneTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
-            you&apos;re already in for today
+            you&apos;re already in for this sidequest
           </Text>
           <Text style={[styles.doneSub, { color: colors.text2, fontFamily: font.dm }]}>
-            one post per sidequest. Catch reactions on the feed, or check back tomorrow.
+            one post per sidequest. Catch reactions on the feed until the next drop (Mon or Fri).
           </Text>
           <Pressable
             onPress={() => router.replace('/feed')}
@@ -244,7 +317,7 @@ export default function UploadScreen() {
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Text style={{ fontSize: 18, color: colors.text1 }}>←</Text>
           </Pressable>
-          <Text style={[styles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>today&apos;s post</Text>
+          <Text style={[styles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>your take</Text>
         </View>
         <View style={[styles.strip, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.dot, { backgroundColor: colors.accent }]} />
@@ -402,6 +475,28 @@ export default function UploadScreen() {
             )}
           </LinearGradient>
         </Pressable>
+        {busy ? (
+          <View style={styles.progressWrap}>
+            <Text style={[styles.progressText, { color: colors.text2, fontFamily: font.dm }]}>
+              {uploadPhase === 'reading'
+                ? 'preparing media...'
+                : uploadPhase === 'uploading'
+                  ? `uploading... ${uploadEstimateSec ? `about ${Math.max(0, uploadEstimateSec - uploadElapsedSec)}s left` : ''}`
+                  : 'saving post...'}
+            </Text>
+            <View style={[styles.progressTrack, { backgroundColor: colors.bg3, borderColor: colors.border2 }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${Math.round(uploadProgress * 100)}%`,
+                    backgroundColor: colors.accent,
+                  },
+                ]}
+              />
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
       <Modal visible={showWin} transparent animationType="none" statusBarTranslucent>
         <Animated.View style={[styles.winBackdrop, { opacity: winOp }]}>
@@ -556,4 +651,23 @@ const styles = StyleSheet.create({
   winShareText: { fontSize: 14, fontWeight: '800' },
   winDoneBtn: { marginTop: 10, paddingVertical: 8 },
   winDoneText: { fontSize: 14, textAlign: 'center' },
+  progressWrap: {
+    marginHorizontal: 18,
+    marginTop: 10,
+    gap: 6,
+  },
+  progressText: {
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
 });

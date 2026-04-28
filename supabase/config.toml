@@ -1,0 +1,6 @@
+# Supabase local / CLI config (extend as needed).
+# https://supabase.com/docs/guides/functions/function-configuration
+
+[functions.broadcast-expo-push]
+# Custom shared secret auth (BROADCAST_PUSH_SECRET); not a Supabase JWT.
+verify_jwt = false

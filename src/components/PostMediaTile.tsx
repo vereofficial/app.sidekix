@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useAppTheme } from '../context/AppThemeContext';
 import { useReadableStorageUrl } from '../hooks/useReadableStorageUrl';
@@ -17,22 +18,40 @@ export function PostMediaTile({
   borderRadius = 12,
   /** Tiny squares (e.g. past sidequest row) — tighter text preview. */
   compact = false,
+  loadVideo = true,
+  autoPlayVideo = false,
 }: {
   post: PostLike;
   style?: ViewStyle;
   borderRadius?: number;
   compact?: boolean;
+  loadVideo?: boolean;
+  autoPlayVideo?: boolean;
 }) {
+  const videoRef = useRef<InstanceType<typeof Video> | null>(null);
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
   const base = [{ borderRadius, overflow: 'hidden' as const }, style];
   const cap = (post.body ?? post.caption ?? '').trim();
   const hasImage = Boolean(post.image_path?.trim());
   const hasVideo = Boolean(post.video_path?.trim());
-  const videoMedia = useReadableStorageUrl(hasVideo ? post.video_path : null);
+  const videoMedia = useReadableStorageUrl(hasVideo && loadVideo ? post.video_path : null);
   const imageMedia = useReadableStorageUrl(hasImage ? post.image_path : null);
 
   if (hasVideo) {
+    if (loadVideo === false) {
+      return (
+        <View style={base} accessibilityLabel="Video post">
+          <LinearGradient
+            colors={resolvedScheme === 'dark' ? ['#1a1a1a', '#0a0a0a'] : ['#e8e6e0', '#d5d1c8']}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }]}>
+            <Text style={{ fontSize: compact ? 22 : 28, color: colors.accent }}>▶</Text>
+          </View>
+        </View>
+      );
+    }
     return (
       <LinearGradient
         colors={resolvedScheme === 'dark' ? ['#1a1a1a', '#0a0a0a'] : ['#e8e6e0', '#d5d1c8']}
@@ -40,13 +59,18 @@ export function PostMediaTile({
       >
         {videoMedia.displayUri ? (
           <Video
+            key={videoMedia.displayUri}
+            ref={videoRef}
             source={{ uri: videoMedia.displayUri }}
             style={StyleSheet.absoluteFillObject}
             resizeMode={ResizeMode.COVER}
-            shouldPlay
-            isLooping
+            shouldPlay={autoPlayVideo}
+            isLooping={autoPlayVideo}
             isMuted
             onError={videoMedia.onLoadError}
+            onLoad={() => {
+              if (!autoPlayVideo) void videoRef.current?.setPositionAsync(0);
+            }}
           />
         ) : (
           <View style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }]}>

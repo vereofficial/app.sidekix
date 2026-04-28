@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,6 +10,7 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ViewToken,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,9 +23,11 @@ import { usePostsForChallenge } from '../../src/hooks/usePostsForChallenge';
 import { usePastChallenges } from '../../src/hooks/usePastChallenges';
 import { useTodayChallenge } from '../../src/hooks/useTodayChallenge';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
+import { PostMediaViewerModal } from '../../src/components/PostMediaViewerModal';
 import { SidekixTabState } from '../../src/components/SidekixTabState';
 import { Wordmark } from '../../src/components/Wordmark';
-import { reactionsLabel } from '../../src/lib/formatCount';
+import { pastChallengePostCountSuffix, reactionsLabel } from '../../src/lib/formatCount';
+import { msUntilActiveSidequestDeadline, sidequestDeadlineSentence } from '../../src/lib/sidequestPeriod';
 import { tryGetSupabase } from '../../src/lib/supabase';
 import { font, getColors } from '../../src/theme';
 import type { PostRow } from '../../src/types/database';
@@ -32,8 +36,10 @@ const TABLET_CONTENT_MAX = 560;
 
 function formatTimeLeftMs(ms: number): string {
   if (ms <= 0) return '0h 0m left';
-  const h = Math.floor(ms / 3600000);
+  const d = Math.floor(ms / 86400000);
+  const h = Math.floor((ms % 86400000) / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
+  if (d > 0) return `${d}d ${h}h left`;
   return `${h}h ${m}m left`;
 }
 
@@ -76,6 +82,9 @@ export default function TodayScreen() {
   useFocusEffect(
     useCallback(() => {
       void Promise.all([refCh(), refCount(), refRecent(), refPast(), refMyPosts()]);
+      return () => {
+        setStripLoopPostId(null);
+      };
     }, [refCh, refCount, refRecent, refPast, refMyPosts]),
   );
 
@@ -92,6 +101,24 @@ export default function TodayScreen() {
   /** Avoid full-screen spinner on every tab focus refetch when today has no challenge (refCh sets loading=true). */
   const challengeFetchCompletedOnceRef = useRef(false);
   const [challengeRetryPending, setChallengeRetryPending] = useState(false);
+  const [viewerPost, setViewerPost] = useState<PostRow | null>(null);
+  /** At most one strip tile loops video; cleared on tab blur and while fullscreen viewer is open. */
+  const [stripLoopPostId, setStripLoopPostId] = useState<string | null>(null);
+
+  const stripViewabilityConfig = useMemo(
+    () => ({ itemVisiblePercentThreshold: 78, minimumViewTime: 200 }),
+    [],
+  );
+
+  const onStripViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const tok = viewableItems.find((v) => v.isViewable);
+      const row = tok?.item as PostRow | undefined;
+      setStripLoopPostId(row?.video_path?.trim() ? row.id : null);
+    },
+    [],
+  );
+
 
   useEffect(() => {
     if (!chLoad) challengeFetchCompletedOnceRef.current = true;
@@ -103,6 +130,7 @@ export default function TodayScreen() {
 
   useEffect(() => {
     setFeedSyncedChallengeId(null);
+    setStripLoopPostId(null);
   }, [challenge?.id]);
 
   useEffect(() => {
@@ -111,11 +139,7 @@ export default function TodayScreen() {
     }
   }, [challenge?.id, postCountLoad, recLoad]);
 
-  const msLeft = useMemo(() => {
-    const e = new Date();
-    e.setHours(23, 59, 59, 999);
-    return e.getTime() - Date.now();
-  }, [tick]);
+  const msLeft = useMemo(() => msUntilActiveSidequestDeadline(), [tick]);
 
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 60000);
@@ -219,10 +243,10 @@ export default function TodayScreen() {
   }, [postCount]);
 
   const postedSubline = useMemo(() => {
-    if (postCount <= 1) return "you're first on campus today.";
+    if (postCount <= 1) return "you're first on campus for this sidequest.";
     if (postCount < 10) return 'Others are posting too — see how it plays out on the feed.';
     const others = postCount - 1;
-    return `${others} other ${others === 1 ? 'person has' : 'people have'} posted today too.`;
+    return `${others} other ${others === 1 ? 'person has' : 'people have'} posted for this sidequest too.`;
   }, [postCount]);
 
   const showRecentSection =
@@ -283,7 +307,10 @@ export default function TodayScreen() {
         <Text
           style={[
             styles.challengeTitle,
-            { color: colors.text1, fontFamily: font.syneExtra },
+            {
+              color: colors.text1,
+              fontFamily: font.syneExtra,
+            },
             centered && styles.challengeHeadingCenter,
           ]}
         >
@@ -355,7 +382,7 @@ export default function TodayScreen() {
         ) : postedToday && myPostToday ? (
           <View style={{ paddingHorizontal: 18, paddingTop: 8 }}>
             {renderChallengeHeading(false)}
-            <Text style={[styles.challengeSub, { color: colors.text2, fontFamily: font.dm, marginTop: 8 }]}>
+            <Text style={[styles.challengeSub, { color: colors.text2, fontFamily: font.syneSemi, marginTop: 8 }]}>
               {postedSubline}
             </Text>
             <Pressable
@@ -363,7 +390,7 @@ export default function TodayScreen() {
               style={({ pressed }) => [styles.heroPostCard, { borderColor: colors.border2, opacity: pressed ? 0.95 : 1 }]}
             >
               <View style={styles.heroPostMedia}>
-                <PostMediaTile post={myPostToday} style={StyleSheet.absoluteFillObject} borderRadius={16} />
+                <PostMediaTile post={myPostToday} style={StyleSheet.absoluteFillObject} borderRadius={16} autoPlayVideo />
                 <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={styles.heroFade} />
                 <View style={[styles.postedPill, { backgroundColor: colors.accent }]}>
                   <Text style={[styles.postedPillText, { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne }]}>
@@ -372,7 +399,7 @@ export default function TodayScreen() {
                 </View>
                 <View style={styles.heroCaptionBlock}>
                   {!myPostTodayIsTextOnly ? (
-                    <Text style={[styles.heroCaption, { color: '#fff', fontFamily: font.dm }]} numberOfLines={2}>
+                    <Text style={[styles.heroCaption, { color: '#fff', fontFamily: font.syneReg }]} numberOfLines={2}>
                       {captionPreview(myPostToday)}
                     </Text>
                   ) : null}
@@ -383,7 +410,8 @@ export default function TodayScreen() {
                       myPostTodayIsTextOnly && { marginTop: 0 },
                     ]}
                   >
-                    ▲ {reactionsLabel(myVotesOnPost)} so far
+                    ▲{' '}
+                    {postCount < 10 ? 'reactions so far' : `${reactionsLabel(myVotesOnPost)} so far`}
                   </Text>
                 </View>
                 <View style={styles.heroSharePill}>
@@ -402,20 +430,10 @@ export default function TodayScreen() {
           >
             {emptyCampus ? (
               <View style={styles.emptyTodayWrap}>
-                <LinearGradient
-                  colors={
-                    resolvedScheme === 'dark'
-                      ? ['rgba(212, 255, 63, 0.26)', 'rgba(159, 184, 46, 0.09)', 'rgba(212, 255, 63, 0.18)']
-                      : ['rgba(90, 122, 0, 0.16)', 'rgba(122, 154, 32, 0.06)', 'rgba(90, 122, 0, 0.12)']
-                  }
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  style={styles.emptyTodayGlow}
-                />
                 <View style={styles.emptyTodayCenter}>
                   {renderChallengeHeading(true)}
-                  <Text style={[styles.emptyTodayDeadline, { color: colors.text2, fontFamily: font.dm, marginTop: 14 }]}>
-                    you have until midnight.
+                  <Text style={[styles.emptyTodayDeadline, { color: colors.text2, fontFamily: font.syneSemi, marginTop: 14 }]}>
+                    {sidequestDeadlineSentence()}
                   </Text>
                   {canUploadToday ? (
                     <Pressable
@@ -440,7 +458,7 @@ export default function TodayScreen() {
             ) : (
               <View style={styles.hero}>
                 {renderChallengeHeading(false)}
-                <Text style={[styles.challengeSub, { color: colors.text2, fontFamily: font.dm, marginTop: 8 }]}>
+                <Text style={[styles.challengeSub, { color: colors.text2, fontFamily: font.syneSemi, marginTop: 8 }]}>
                   {sublineCampus}
                 </Text>
               </View>
@@ -460,7 +478,7 @@ export default function TodayScreen() {
               >
                 <Text style={{ fontSize: 28 }}>📸</Text>
                 <Text style={[styles.szTitle, { color: colors.text1, fontFamily: font.syne }]}>post your take</Text>
-                <Text style={[styles.szSub, { color: colors.text3, fontFamily: font.dm }]}>tap to upload</Text>
+                <Text style={[styles.szSub, { color: colors.text3, fontFamily: font.syneSemi }]}>tap to upload</Text>
               </Pressable>
             ) : null}
 
@@ -470,21 +488,41 @@ export default function TodayScreen() {
         {showSoFarTodayStrip ? (
           <View style={{ marginTop: 8 }}>
             <View style={styles.sectionRow}>
-              <Text style={[styles.sectionTitle, { color: colors.text3, fontFamily: font.syne }]}>so far today</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text3, fontFamily: font.syne }]}>so far this sidequest</Text>
             </View>
             {recent.length === 0 && recLoad ? (
               <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
             ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stripTall}>
-                {recent.map((p) => (
-                  <View key={p.id} style={styles.pcTall}>
-                    <PostMediaTile post={p} style={{ width: '100%', height: 112, borderRadius: 12 }} borderRadius={12} />
-                    <Text style={[styles.stripHandle, { color: colors.text2, fontFamily: font.syne }]} numberOfLines={1}>
-                      {p.is_anonymous ? 'anon' : `@${stripNames[p.user_id] ?? '…'}`}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
+              <FlatList
+                horizontal
+                data={recent}
+                keyExtractor={(p) => p.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.stripTall}
+                ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
+                viewabilityConfig={stripViewabilityConfig}
+                onViewableItemsChanged={onStripViewableItemsChanged}
+                extraData={{ stripLoopPostId, viewerOpen: Boolean(viewerPost) }}
+                renderItem={({ item: p }) => {
+                  const loopHere =
+                    Boolean(p.video_path?.trim()) && stripLoopPostId === p.id && !viewerPost;
+                  return (
+                    <View style={styles.pcTall}>
+                      <Pressable onPress={() => setViewerPost(p)}>
+                        <PostMediaTile
+                          post={p}
+                          style={{ width: '100%', height: 112, borderRadius: 12 }}
+                          borderRadius={12}
+                          autoPlayVideo={loopHere}
+                        />
+                      </Pressable>
+                      <Text style={[styles.stripHandle, { color: colors.text2, fontFamily: font.syne }]} numberOfLines={1}>
+                        {p.is_anonymous ? 'anon' : `@${stripNames[p.user_id] ?? '…'}`}
+                      </Text>
+                    </View>
+                  );
+                }}
+              />
             )}
           </View>
         ) : campusHasPostsOthers && feedInitialPending && recent.length === 0 ? (
@@ -503,24 +541,38 @@ export default function TodayScreen() {
             {!showRecentStripGrid ? (
               <ActivityIndicator color={colors.accent} style={{ marginVertical: 20 }} />
             ) : (
-              <ScrollView
+              <FlatList
                 horizontal
+                data={recent}
+                keyExtractor={(p) => p.id}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.strip}
-              >
-                {recent.map((p) => (
-                  <View key={p.id} style={styles.pc}>
-                    <PostMediaTile
-                      post={p}
-                      style={{ width: 72, height: 72 }}
-                      borderRadius={10}
-                    />
-                    <View style={styles.pvWrap}>
-                      <Text style={[styles.pv, { color: colors.accent, fontFamily: font.syne }]}>▲ {p.vote_count}</Text>
+                ItemSeparatorComponent={() => <View style={{ width: 7 }} />}
+                viewabilityConfig={stripViewabilityConfig}
+                onViewableItemsChanged={onStripViewableItemsChanged}
+                extraData={{ stripLoopPostId, viewerOpen: Boolean(viewerPost) }}
+                renderItem={({ item: p }) => {
+                  const loopHere =
+                    Boolean(p.video_path?.trim()) && stripLoopPostId === p.id && !viewerPost;
+                  return (
+                    <View style={styles.pc}>
+                      <Pressable onPress={() => setViewerPost(p)}>
+                        <PostMediaTile
+                          post={p}
+                          style={{ width: 72, height: 72 }}
+                          borderRadius={10}
+                          autoPlayVideo={loopHere}
+                        />
+                      </Pressable>
+                      {postCount >= 10 ? (
+                        <View style={styles.pvWrap}>
+                          <Text style={[styles.pv, { color: colors.accent, fontFamily: font.syne }]}>▲ {p.vote_count}</Text>
+                        </View>
+                      ) : null}
                     </View>
-                  </View>
-                ))}
-              </ScrollView>
+                  );
+                }}
+              />
             )}
           </>
         ) : null}
@@ -534,12 +586,13 @@ export default function TodayScreen() {
                   { color: scheme === 'light' ? '#A0A0A0' : colors.text3, fontFamily: font.syne },
                 ]}
               >
-                Past sidequests
+                Past challenges
               </Text>
             </View>
             {pastRowsToShow.map((c) => {
               const done = completedPastIds.has(c.id);
               const n = pastPostCounts[c.id] ?? 0;
+              const countSuffix = pastChallengePostCountSuffix(n);
               const myPost = myPostByChallengeId.get(c.id);
               return (
                 <View
@@ -575,11 +628,11 @@ export default function TodayScreen() {
                     <Text
                       style={[
                         styles.pastCardMeta,
-                        { color: scheme === 'light' ? '#A0A0A0' : colors.text3, fontFamily: font.dm },
+                        { color: scheme === 'light' ? '#A0A0A0' : colors.text3, fontFamily: font.syneSemi },
                       ]}
                     >
-                      {formatRelativePastDay(c.day)} · {n.toLocaleString('en-US')}{' '}
-                      {n === 1 ? 'post' : 'posts'}
+                      {formatRelativePastDay(c.day)}
+                      {countSuffix != null ? ` · ${countSuffix}` : ''}
                     </Text>
                   </View>
                   <Text
@@ -598,6 +651,7 @@ export default function TodayScreen() {
         ) : null}
         </View>
       </ScrollView>
+      <PostMediaViewerModal post={viewerPost} visible={Boolean(viewerPost)} onClose={() => setViewerPost(null)} />
     </View>
   );
 }
@@ -627,7 +681,7 @@ const styles = StyleSheet.create({
   hero: { paddingHorizontal: 18, paddingTop: 18 },
   challengeTag: { fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 7 },
   challengeTitle: { fontSize: 28, lineHeight: 32, letterSpacing: -0.35, marginBottom: 6 },
-  challengeHeadingCenter: { textAlign: 'center', alignSelf: 'stretch' },
+  challengeHeadingCenter: { textAlign: 'center', alignSelf: 'center', maxWidth: 360 },
   challengeSub: { fontSize: 12, lineHeight: 17 },
   heroPostCard: { marginTop: 16, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   heroPostMedia: { width: '100%', aspectRatio: 3 / 4, borderRadius: 16, overflow: 'hidden' },
@@ -651,19 +705,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingHorizontal: 22,
     paddingBottom: 12,
-    position: 'relative',
     justifyContent: 'center',
     width: '100%',
-  },
-  /** Soft oval behind hero copy — same lime→olive axis as ChallengeDropOverlay CTA. */
-  emptyTodayGlow: {
-    position: 'absolute',
-    top: '18%',
-    left: '8%',
-    right: '8%',
-    height: 240,
-    borderRadius: 140,
-    overflow: 'hidden',
   },
   emptyTodayCenter: {
     paddingVertical: 8,
@@ -671,7 +714,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'stretch',
     width: '100%',
-    zIndex: 1,
   },
   emptyTodayDeadline: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
   emptyTodayCta: {

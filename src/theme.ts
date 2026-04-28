@@ -31,7 +31,8 @@ export const darkColors: ThemeColors = {
   border2: '#2a2a2a',
   text1: '#ffffff',
   text2: '#888888',
-  text3: '#444444',
+  /** Tertiary; must stay readable on #0A0A0A (e.g. 10px uppercase challenge tags). */
+  text3: '#6E6E6E',
   navBg: '#0e0e0e',
   navBorder: '#1a1a1a',
   pillBg: '#1a1a1a',

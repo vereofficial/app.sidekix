@@ -1,7 +1,16 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { getSupabasePublicConfig, isSupabaseConfigured } from './supabaseConfig';
 
 let client: SupabaseClient | null = null;
+let appStateSub: { remove: () => void } | null = null;
+
+function handleAppStateChange(nextState: AppStateStatus) {
+  if (!client) return;
+  if (nextState === 'active') client.auth.startAutoRefresh();
+  else client.auth.stopAutoRefresh();
+}
 
 export function getSupabase(): SupabaseClient {
   if (!isSupabaseConfigured()) {
@@ -11,6 +20,7 @@ export function getSupabase(): SupabaseClient {
     const { url, anonKey } = getSupabasePublicConfig();
     client = createClient(url, anonKey, {
       auth: {
+        storage: AsyncStorage,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
@@ -18,6 +28,11 @@ export function getSupabase(): SupabaseClient {
         flowType: 'implicit',
       },
     });
+
+    if (Platform.OS !== 'web' && !appStateSub) {
+      client.auth.startAutoRefresh();
+      appStateSub = AppState.addEventListener('change', handleAppStateChange);
+    }
   }
   return client;
 }

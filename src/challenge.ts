@@ -1,4 +1,5 @@
 import type { ChallengeRow } from './types/database';
+import { activeSidequestTag } from './lib/sidequestPeriod';
 
 export function splitChallengeTitle(challenge: Pick<ChallengeRow, 'title' | 'emphasis'>): {
   before: string;
@@ -13,6 +14,6 @@ export function splitChallengeTitle(challenge: Pick<ChallengeRow, 'title' | 'emp
   };
 }
 
-export function challengeTag(challenge: ChallengeRow): string {
-  return `today's sidequest · #${challenge.display_number}`;
+export function challengeTag(_challenge: ChallengeRow): string {
+  return activeSidequestTag();
 }

@@ -1,8 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { splitChallengeTitle } from '../../src/challenge';
+import { challengeTag, splitChallengeTitle } from '../../src/challenge';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
 import { useAuth } from '../../src/context/AuthContext';
 import { useAppTheme } from '../../src/context/AppThemeContext';
@@ -23,6 +23,7 @@ export default function SubmissionDetailScreen() {
   const [challenge, setChallenge] = useState<ChallengeRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -54,6 +55,41 @@ export default function SubmissionDetailScreen() {
     void load();
   }, [id, user?.id]);
 
+  const deletePost = async () => {
+    if (!post?.id || !user?.id) return;
+    const sb = tryGetSupabase();
+    if (!sb) {
+      Alert.alert('Offline', 'Try again when you’re connected.');
+      return;
+    }
+    Alert.alert('Delete this post?', 'This removes your take and its reactions. You can post again for this sidequest if the window is still open.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setDeleting(true);
+            try {
+              const paths = [post.image_path, post.video_path].filter((p): p is string => Boolean(p?.trim()));
+              if (paths.length > 0) {
+                const { error: stErr } = await sb.storage.from('post-media').remove(paths);
+                if (stErr) throw stErr;
+              }
+              const { error: delErr } = await sb.from('posts').delete().eq('id', post.id).eq('user_id', user.id);
+              if (delErr) throw delErr;
+              router.back();
+            } catch (e) {
+              Alert.alert('Could not delete', e instanceof Error ? e.message : 'Something went wrong.');
+            } finally {
+              setDeleting(false);
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
   const cap = (post?.body ?? post?.caption ?? '').trim();
   /** Text-only posts already show copy inside PostMediaTile — don’t duplicate below the card. */
   const showCaptionBelowCard =
@@ -65,6 +101,8 @@ export default function SubmissionDetailScreen() {
     ? splitChallengeTitle(challenge)
     : { before: '', after: '' };
 
+  const destructive = resolvedScheme === 'dark' ? '#FF6B6B' : '#C62828';
+
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <View style={styles.head}>
@@ -72,7 +110,15 @@ export default function SubmissionDetailScreen() {
           <Text style={{ fontSize: 18, color: colors.text1 }}>←</Text>
         </Pressable>
         <Text style={[styles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>your take</Text>
-        <View style={{ width: 24 }} />
+        {!loading && post ? (
+          <Pressable onPress={deletePost} disabled={deleting} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={[styles.headDelete, { color: destructive, fontFamily: font.syne }]}>
+              {deleting ? 'deleting…' : 'delete'}
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={{ width: 56 }} />
+        )}
       </View>
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 32 }} />
@@ -84,7 +130,7 @@ export default function SubmissionDetailScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.hero, { borderColor: colors.border2 }]}>
-            <PostMediaTile post={post} style={styles.heroMedia} borderRadius={16} />
+            <PostMediaTile post={post} style={styles.heroMedia} borderRadius={16} autoPlayVideo />
           </View>
           {showCaptionBelowCard ? (
             <Text style={[styles.caption, { color: colors.text1, fontFamily: font.dm }]}>{cap}</Text>
@@ -93,7 +139,7 @@ export default function SubmissionDetailScreen() {
             {challenge ? (
               <View style={styles.sidequestHeader}>
                 <Text style={[styles.challengeTag, { color: colors.text3, fontFamily: font.syne }]}>
-                  sidequest · #{challenge.display_number}
+                  {challengeTag(challenge)}
                 </Text>
                 <Text style={[styles.challengeTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
                   {challengeTitleParts.before}
@@ -154,6 +200,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   title: { fontSize: 16, fontWeight: '800', flex: 1, textAlign: 'center' },
+  headDelete: { fontSize: 14, fontWeight: '700' },
   err: { paddingHorizontal: 22, marginTop: 24, fontSize: 14 },
   hero: {
     marginHorizontal: 18,

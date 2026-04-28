@@ -36,7 +36,6 @@ type ChallengeRow = {
   id: string;
   title: string;
   emphasis: string;
-  display_number: number;
 };
 
 type ProfileRow = {
@@ -106,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const chRes = await fetch(
-    `${supabaseUrl}/rest/v1/challenges?id=eq.${post.challenge_id}&select=id,title,emphasis,display_number`,
+    `${supabaseUrl}/rest/v1/challenges?id=eq.${post.challenge_id}&select=id,title,emphasis`,
     { headers },
   );
   const challenges = chRes.ok ? ((await chRes.json()) as ChallengeRow[]) : [];

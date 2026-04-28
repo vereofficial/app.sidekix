@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { splitChallengeTitle } from '../../src/challenge';
+import { challengeTag, splitChallengeTitle } from '../../src/challenge';
 import { PostMediaTile } from '../../src/components/PostMediaTile';
 import { useAppTheme } from '../../src/context/AppThemeContext';
 import { MARKETING_SITE_URL } from '../../src/constants/shareLinks';
@@ -119,7 +119,7 @@ export default function PublicPostScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         {challenge ? (
           <Text style={[styles.chTag, { color: colors.text3, fontFamily: font.syne }]}>
-            {challenge.display_number ? `sidequest · #${challenge.display_number}` : 'sidequest'}
+            {challengeTag(challenge)}
           </Text>
         ) : null}
         <Text style={[styles.chTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
@@ -137,7 +137,7 @@ export default function PublicPostScreen() {
           {post.is_anonymous ? 'anonymous' : username ? `@${username}` : 'campus'}
         </Text>
         <View style={[styles.mediaWrap, { borderColor: colors.border2 }]}>
-          <PostMediaTile post={post} style={styles.media} borderRadius={14} />
+          <PostMediaTile post={post} style={styles.media} borderRadius={14} autoPlayVideo />
         </View>
         {cap ? (
           <Text style={[styles.caption, { color: colors.text1, fontFamily: font.dm }]}>{cap}</Text>

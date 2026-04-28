@@ -3,6 +3,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { splitChallengeTitle } from '../challenge';
 import type { ChallengeRow } from '../types/database';
+import { activeSidequestTag, sidequestDeadlineSentence } from '../lib/sidequestPeriod';
 import { hapticChallengeDropBurst, hapticLight } from '../lib/haptics';
 import { font, getColors } from '../theme';
 
@@ -165,7 +166,7 @@ export function ChallengeDropOverlay({
               },
             ]}
           >
-            {challenge ? `sidequest #${challenge.display_number} · today` : 'sidequest · today'}
+            {activeSidequestTag()}
           </Animated.Text>
           <Animated.Text
             style={[
@@ -194,7 +195,7 @@ export function ChallengeDropOverlay({
                 );
               })()
             ) : (
-              "today's sidequest"
+              'this challenge'
             )}
           </Animated.Text>
           <Animated.Text
@@ -202,7 +203,7 @@ export function ChallengeDropOverlay({
               styles.dropSub,
               {
                 color: colors.text2,
-                fontFamily: font.dm,
+                fontFamily: font.syneSemi,
                 opacity: line3,
                 transform: [
                   {
@@ -212,7 +213,7 @@ export function ChallengeDropOverlay({
               },
             ]}
           >
-            you have until midnight.
+            {sidequestDeadlineSentence()}
           </Animated.Text>
           <Animated.View style={{ opacity: ctaOp }}>
             <Pressable

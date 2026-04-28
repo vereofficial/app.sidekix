@@ -1,4 +1,4 @@
-/** YYYY-MM-DD in the device's local calendar (not UTC). Matches typical `challenges.day` storage. */
+/** YYYY-MM-DD in the device's local calendar (not UTC). Used for labels; active sidequest keys are in `sidequestPeriod.ts`. */
 export function localCalendarYmd(d: Date = new Date()): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
