@@ -26,6 +26,8 @@ import { PostMediaViewerModal } from '../../src/components/PostMediaViewerModal'
 import { SidekixTabState } from '../../src/components/SidekixTabState';
 import { useFollows } from '../../src/hooks/useFollows';
 import { useFriendRequests } from '../../src/hooks/useFriendRequests';
+import { useFlowingSidequestSubmissions } from '../../src/hooks/useFlowingSidequestSubmissions';
+import { useLegacyChallengeIdeas } from '../../src/hooks/useLegacyChallengeIdeas';
 import { usePostsForChallenge } from '../../src/hooks/usePostsForChallenge';
 import { useSidequestFeed } from '../../src/hooks/useSidequestFeed';
 import { useTodayChallenge } from '../../src/hooks/useTodayChallenge';
@@ -48,14 +50,24 @@ function friendDisplayFirst(u: string): string {
   return base || u;
 }
 
-export default function FeedScreen() {
+function timeAgoLabel(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.max(1, Math.floor(ms / 60000));
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  return `${day}d ago`;
+}
+
+export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
   const scheme = resolvedScheme;
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { challenge, loading: chLoad, refresh: refCh } = useTodayChallenge();
   const { posts, myVoteIds, loading, error: postsErr, refresh } = usePostsForChallenge(
     challenge?.id ?? null,
@@ -67,7 +79,9 @@ export default function FeedScreen() {
   const { incoming, outgoingIds, refresh: refFriendReq } = useFriendRequests(user?.id);
   const [homeMode, setHomeMode] = useState<'feed' | 'recent'>('feed');
   const [activeCats, setActiveCats] = useState<string[]>([]);
-  const { rows: sidequests, loading: sidequestsLoading, refresh: refreshSidequests } = useSidequestFeed(activeCats);
+  const { rows: sidequests, loading: sidequestsLoading, refresh: refreshSidequests } = useSidequestFeed(activeCats, isAdmin);
+  const { rows: flowingRows, loading: flowingLoading, refresh: refreshFlowing } = useFlowingSidequestSubmissions();
+  const { rows: legacyIdeas, loading: legacyIdeasLoading, refresh: refreshLegacyIdeas } = useLegacyChallengeIdeas();
   const postedToday = usePostedToday(user?.id);
   const [mode, setMode] = useState<'campus' | 'friends'>('campus');
   const [sheet, setSheet] = useState(false);
@@ -77,6 +91,8 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [usernames, setUsernames] = useState<Record<string, string>>({});
   const [viewerPost, setViewerPost] = useState<PostRow | null>(null);
+  const featuredFlowing = flowingRows[0] ?? null;
+  const flowingRest = featuredFlowing ? flowingRows.slice(1) : [];
 
   useEffect(() => {
     void refFollows(user?.id);
@@ -161,6 +177,38 @@ export default function FeedScreen() {
     void setHomeFeedMode(user?.id ?? null, next);
   };
 
+  const moderateSidequest = async (sidequestId: string, approval_status: 'approved' | 'rejected') => {
+    if (!isAdmin) return;
+    const sb = tryGetSupabase();
+    if (!sb) return;
+    const { error } = await sb
+      .from('sidequests')
+      .update({
+        approval_status,
+        reviewed_by: user?.id ?? null,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', sidequestId);
+    if (error) {
+      Alert.alert('Moderation failed', error.message);
+      return;
+    }
+    await refreshSidequests();
+  };
+
+  const deletePostAsAdmin = async (postId: string) => {
+    if (!isAdmin) return;
+    const sb = tryGetSupabase();
+    if (!sb) return;
+    const { error } = await sb.from('posts').delete().eq('id', postId);
+    if (error) {
+      Alert.alert('Delete failed', error.message);
+      return;
+    }
+    if (viewerPost?.id === postId) setViewerPost(null);
+    await refresh();
+  };
+
   const onVote = useCallback(
     async (postId: string, currently: boolean) => {
       const sb = tryGetSupabase();
@@ -178,7 +226,7 @@ export default function FeedScreen() {
 
   const onPull = async () => {
     setRefreshing(true);
-    await Promise.all([refCh(), refresh(), refFollows(user?.id), refFriendReq(), refreshSidequests()]);
+    await Promise.all([refCh(), refresh(), refFollows(user?.id), refFriendReq(), refreshSidequests(), refreshFlowing(), refreshLegacyIdeas()]);
     setRefreshing(false);
   };
 
@@ -385,58 +433,32 @@ export default function FeedScreen() {
         <View style={{ width: '100%', maxWidth: TABLET_CONTENT_MAX }}>
         <View style={styles.feedHeader}>
           <View style={styles.titleRow}>
-            <Text style={[styles.feedTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>SIDEKIX</Text>
+            <Text style={[styles.feedTitle, { color: colors.text1, fontFamily: font.serifItalic }]}>sidekix</Text>
             <View style={[styles.toggleWrap, { backgroundColor: colors.pillBg }]}>
               <Pressable onPress={() => chooseHomeMode('feed')} style={[styles.tb, homeMode === 'feed' && { backgroundColor: colors.accent }]}>
                 <Text
                   style={[
                     styles.tbText,
-                    { fontFamily: font.syne },
+                    { fontFamily: font.mono },
                     { color: homeMode === 'feed' ? (scheme === 'light' ? '#fff' : '#0A0A0A') : colors.text3 },
                   ]}
                 >
-                  Feed
+                  sidequest view
                 </Text>
               </Pressable>
               <Pressable onPress={() => chooseHomeMode('recent')} style={[styles.tb, homeMode === 'recent' && { backgroundColor: colors.accent }]}>
                 <Text
                   style={[
                     styles.tbText,
-                    { fontFamily: font.syne },
+                    { fontFamily: font.mono },
                     { color: homeMode === 'recent' ? (scheme === 'light' ? '#fff' : '#0A0A0A') : colors.text3 },
                   ]}
                 >
-                  Recent
+                  feed view
                 </Text>
               </Pressable>
             </View>
           </View>
-          {homeMode === 'recent' ? (
-            <View style={[styles.toggleWrap, { backgroundColor: colors.pillBg, marginTop: 10 }]}>
-              <Pressable onPress={() => setMode('campus')} style={[styles.tb, mode === 'campus' && { backgroundColor: colors.accent }]}>
-                <Text
-                  style={[
-                    styles.tbText,
-                    { fontFamily: font.syne },
-                    { color: mode === 'campus' ? (scheme === 'light' ? '#fff' : '#0A0A0A') : colors.text3 },
-                  ]}
-                >
-                  Campus
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => setMode('friends')} style={[styles.tb, mode === 'friends' && { backgroundColor: colors.accent }]}>
-                <Text
-                  style={[
-                    styles.tbText,
-                    { fontFamily: font.syne },
-                    { color: mode === 'friends' ? (scheme === 'light' ? '#fff' : '#0A0A0A') : colors.text3 },
-                  ]}
-                >
-                  Friends
-                </Text>
-              </Pressable>
-            </View>
-          ) : null}
         </View>
 
         {homeMode === 'feed' ? (
@@ -451,15 +473,18 @@ export default function FeedScreen() {
                     { borderColor: colors.border2, backgroundColor: activeCats.includes(cat) ? colors.accentMuted : colors.card },
                   ]}
                 >
-                  <Text style={{ color: colors.text2, fontFamily: font.syne, fontSize: 11 }}>{cat}</Text>
+                  <Text style={{ color: colors.text2, fontFamily: font.mono, fontSize: 11 }}>{cat}</Text>
                 </Pressable>
               ))}
             </ScrollView>
-            {sidequestsLoading ? (
+            {sidequestsLoading || legacyIdeasLoading ? (
               <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
             ) : (
               <View style={styles.sidequestListWrap}>
                 {sidequests.map((sq) => (
+                  (() => {
+                    const status = sq.approval_status ?? 'approved';
+                    return (
                   <Pressable
                     key={sq.id}
                     onPress={() => router.push(`/sidequest/${sq.id}`)}
@@ -469,16 +494,21 @@ export default function FeedScreen() {
                     ]}
                   >
                     <View style={styles.sidequestHead}>
-                      <Text style={{ color: colors.text3, fontFamily: font.syne, fontSize: 10 }}>
+                      <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>
                         created by {sq.creator_username === 'anonymous' ? 'anonymous' : `@${sq.creator_username}`}
                       </Text>
                       <Text style={{ color: colors.text3 }}>→</Text>
                     </View>
-                    <Text style={[styles.sidequestTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>{sq.title}</Text>
+                    <Text style={[styles.sidequestTitle, { color: colors.text1, fontFamily: font.dmBold }]}>{sq.title}</Text>
+                    {status !== 'approved' ? (
+                      <Text style={{ marginTop: 4, color: colors.text3, fontFamily: font.dm, fontSize: 11 }}>
+                        {status === 'pending' ? 'pending admin approval' : 'rejected'}
+                      </Text>
+                    ) : null}
                     <View style={styles.sidequestTags}>
                       {(sq.categories ?? []).slice(0, 3).map((c) => (
                         <View key={c} style={[styles.sidequestTag, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}>
-                          <Text style={{ color: colors.text2, fontSize: 10, fontFamily: font.syne }}>{c}</Text>
+                          <Text style={{ color: colors.text2, fontSize: 10, fontFamily: font.mono }}>{c}</Text>
                         </View>
                       ))}
                     </View>
@@ -501,11 +531,215 @@ export default function FeedScreen() {
                     <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 12, marginTop: 6 }}>
                       {sq.completion_count} {sq.completion_count === 1 ? 'adventure' : 'adventures'}
                     </Text>
+                    {isAdmin && status === 'pending' ? (
+                      <View style={styles.modRow}>
+                        <Pressable
+                          onPress={() => void moderateSidequest(sq.id, 'approved')}
+                          style={[styles.modBtn, { backgroundColor: colors.accent }]}
+                        >
+                          <Text style={{ color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.dmBold, fontSize: 11 }}>
+                            approve
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => void moderateSidequest(sq.id, 'rejected')}
+                          style={[styles.modBtn, { borderColor: colors.border2, borderWidth: 1, backgroundColor: colors.card }]}
+                        >
+                          <Text style={{ color: colors.text2, fontFamily: font.dmBold, fontSize: 11 }}>reject</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                    );
+                  })()
+                ))}
+                {legacyIdeas.map((idea) => (
+                  <Pressable
+                    key={`legacy-${idea.challenge_id}`}
+                    onPress={() => router.push(`/challenge/${idea.challenge_id}`)}
+                    style={({ pressed }) => [
+                      styles.sidequestCard,
+                      { borderColor: colors.border2, backgroundColor: colors.card, opacity: pressed ? 0.94 : 1 },
+                    ]}
+                  >
+                    <View style={styles.sidequestHead}>
+                      <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>
+                        created by @{idea.creator_username}
+                      </Text>
+                      <Text style={{ color: colors.text3 }}>→</Text>
+                    </View>
+                    <Text style={[styles.sidequestTitle, { color: colors.text1, fontFamily: font.dmBold }]}>
+                      {idea.title}
+                    </Text>
+                    <View style={styles.sidequestTags}>
+                      <View style={[styles.sidequestTag, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}>
+                        <Text style={{ color: colors.text2, fontSize: 10, fontFamily: font.mono }}>legacy challenge</Text>
+                      </View>
+                    </View>
+                    <View style={styles.previewRow}>
+                      {idea.preview_posts.map((p) => (
+                        <View key={p.id} style={styles.previewTile}>
+                          <PostMediaTile post={p} style={styles.previewTile} borderRadius={8} />
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 12, marginTop: 6 }}>
+                      {idea.completion_count} {idea.completion_count === 1 ? 'adventure' : 'adventures'}
+                    </Text>
                   </Pressable>
                 ))}
               </View>
             )}
           </>
+        ) : null}
+
+        {homeMode === 'recent' ? (
+          flowingLoading ? (
+            <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
+          ) : flowingRows.length === 0 ? (
+            <View style={styles.sidequestListWrap}>
+              <View style={[styles.sidequestCard, { borderColor: colors.border2, backgroundColor: colors.card }]}>
+                <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  feed view
+                </Text>
+                <Text style={[styles.sidequestTitle, { color: colors.text1, fontFamily: font.serifItalic }]}>
+                  No posts yet - share the first adventure.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.sidequestListWrap}>
+              {featuredFlowing ? (
+                <Pressable
+                  key={`featured-${featuredFlowing.id}`}
+                  onPress={() =>
+                    featuredFlowing.source === 'legacy'
+                      ? router.push(`/challenge/${featuredFlowing.sidequest_id}`)
+                      : router.push(`/sidequest/${featuredFlowing.sidequest_id}`)
+                  }
+                  style={({ pressed }) => [
+                    styles.featuredCard,
+                    { borderColor: colors.border2, backgroundColor: colors.card, opacity: pressed ? 0.94 : 1 },
+                  ]}
+                >
+                  <View style={styles.feedHeaderRow}>
+                    <View style={[styles.feedAvatar, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}>
+                      <Text style={{ color: colors.text1, fontFamily: font.dmBold, fontSize: 14 }}>
+                        {(featuredFlowing.username === 'anonymous' ? 'A' : featuredFlowing.username.charAt(0)).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.text1, fontFamily: font.dmBold, fontSize: 19 }}>
+                        {featuredFlowing.username === 'anonymous' ? 'anonymous' : featuredFlowing.username}
+                      </Text>
+                      <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>
+                        {timeAgoLabel(featuredFlowing.created_at)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                    featured response
+                  </Text>
+                  <View style={[styles.feedTypeBadge, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}>
+                    <Text style={{ color: featuredFlowing.source === 'legacy' ? '#2a69d1' : '#c2580d', fontFamily: font.mono, fontSize: 10 }}>
+                      {featuredFlowing.source === 'legacy' ? 'IDEA' : 'ADVENTURE'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.featuredTitle, { color: colors.text1, fontFamily: font.serifItalic }]}>
+                    {featuredFlowing.sidequest_title}
+                  </Text>
+                  <Text style={{ color: colors.text2, fontFamily: font.dm, marginTop: 4 }}>
+                    {featuredFlowing.body ?? 'Shared an adventure'}
+                  </Text>
+                  <View style={[styles.sidequestHead, { marginTop: 8 }]}>
+                    <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>
+                      {featuredFlowing.username === 'anonymous' ? 'anonymous' : `@${featuredFlowing.username}`}
+                    </Text>
+                    <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>
+                      {featuredFlowing.sidequest_completion_count} done
+                    </Text>
+                  </View>
+                </Pressable>
+              ) : null}
+              {flowingRest.map((row) => (
+                <Pressable
+                  key={row.id}
+                  onPress={() =>
+                    row.source === 'legacy'
+                      ? router.push(`/challenge/${row.sidequest_id}`)
+                      : router.push(`/sidequest/${row.sidequest_id}`)
+                  }
+                  style={({ pressed }) => [
+                    styles.sidequestCard,
+                    { borderColor: colors.border2, backgroundColor: colors.card, opacity: pressed ? 0.94 : 1 },
+                  ]}
+                >
+                  <View style={styles.feedHeaderRow}>
+                    <View style={[styles.feedAvatar, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}>
+                      <Text style={{ color: colors.text1, fontFamily: font.dmBold, fontSize: 12 }}>
+                        {(row.username === 'anonymous' ? 'A' : row.username.charAt(0)).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.text1, fontFamily: font.dmBold, fontSize: 16 }}>
+                        {row.username === 'anonymous' ? 'anonymous' : row.username}
+                      </Text>
+                      <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>
+                        {timeAgoLabel(row.created_at)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.sidequestHead}>
+                    <View style={[styles.feedTypeBadge, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}>
+                      <Text style={{ color: row.source === 'legacy' ? '#2a69d1' : '#c2580d', fontFamily: font.mono, fontSize: 10 }}>
+                        {row.source === 'legacy' ? 'IDEA' : 'ADVENTURE'}
+                      </Text>
+                    </View>
+                    <View />
+                  </View>
+                  <View style={[styles.sidequestHead, { marginTop: 6 }]}>
+                    <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>
+                      {row.username === 'anonymous' ? 'anonymous' : `@${row.username}`}
+                    </Text>
+                    <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>
+                      {row.sidequest_completion_count} done
+                    </Text>
+                  </View>
+                  <Text style={[styles.sidequestTitle, { color: colors.text1, fontFamily: font.serifItalic }]}>
+                    {row.sidequest_title}
+                  </Text>
+                  <View style={styles.previewRow}>
+                    <PostMediaTile
+                      post={{ ...row, challenge_id: 'sidequest', caption: row.body, text_style: null }}
+                      style={styles.flowingMedia}
+                      borderRadius={10}
+                    />
+                  </View>
+                  {row.body ? (
+                    <Text numberOfLines={3} style={{ color: colors.text2, marginTop: 8, fontFamily: font.dm }}>
+                      {row.body}
+                    </Text>
+                  ) : null}
+                  <View style={styles.sidequestTags}>
+                    {row.sidequest_categories.slice(0, 3).map((c) => (
+                      <View key={`${row.id}-${c}`} style={[styles.sidequestTag, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}>
+                        <Text style={{ color: colors.text2, fontSize: 10, fontFamily: font.mono }}>{c}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={[styles.feedActionsRow, { borderTopColor: colors.border2 }]}>
+                    <View style={[styles.feedActionPill, { borderColor: colors.border2, backgroundColor: '#fff4ed' }]}>
+                      <Text style={{ color: '#c2580d', fontFamily: font.dmBold, fontSize: 12 }}>🔥 {Math.max(1, row.sidequest_completion_count)}</Text>
+                    </View>
+                    <View style={[styles.feedActionPill, { borderColor: colors.border2, backgroundColor: '#f7f6ff' }]}>
+                      <Text style={{ color: '#6f66b0', fontFamily: font.dmBold, fontSize: 12 }}>💀 {Math.max(1, Math.floor(row.sidequest_completion_count / 2))}</Text>
+                    </View>
+                    <Text style={{ color: colors.text3, fontFamily: font.dmBold, marginLeft: 4 }}>↗</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )
         ) : null}
 
         {homeMode === 'recent' && mode === 'friends' && user?.id && incoming.length > 0 ? (
@@ -519,7 +753,7 @@ export default function FeedScreen() {
           </View>
         ) : null}
 
-        {homeMode === 'recent' ? (
+        {homeMode === 'recent' && false ? (
           !challenge ? (
           chLoad ? (
             <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
@@ -593,19 +827,22 @@ export default function FeedScreen() {
               <View style={styles.promptPad}>
                 <View style={[styles.prompt, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <View style={[styles.fpd, { backgroundColor: colors.accent }]} />
-                  <Text style={[styles.fpt, { color: colors.text1, fontFamily: font.syne }]}>
-                    {challengeTag(challenge)} ·{' '}
-                    {(() => {
-                      const { before, after } = splitChallengeTitle(challenge);
-                      return (
-                        <>
-                          {before}
-                          <Text style={{ color: colors.accent }}>{challenge.emphasis}</Text>
-                          {after}
-                        </>
-                      );
-                    })()}
-                  </Text>
+                  {challenge ? (
+                    <Text style={[styles.fpt, { color: colors.text1, fontFamily: font.syne }]}>
+                      {challengeTag(challenge as NonNullable<typeof challenge>)} ·{' '}
+                      {(() => {
+                        const c = challenge as NonNullable<typeof challenge>;
+                        const { before, after } = splitChallengeTitle(c);
+                        return (
+                          <>
+                            {before}
+                            <Text style={{ color: colors.accent }}>{c.emphasis}</Text>
+                            {after}
+                          </>
+                        );
+                      })()}
+                    </Text>
+                  ) : null}
                   {campusFeedCountLine != null ? (
                     <Text style={[styles.fpc, { color: colors.text3, fontFamily: font.dm }]}>
                       {campusFeedCountLine}
@@ -825,16 +1062,6 @@ export default function FeedScreen() {
         </View>
       </ScrollView>
 
-      <Pressable
-        onPress={() => router.push('/post-choice')}
-        style={({ pressed }) => [
-          styles.fabPost,
-          { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1, bottom: Math.max(insets.bottom, 12) + 8 },
-        ]}
-      >
-        <Text style={{ color: resolvedScheme === 'light' ? '#fff' : '#0A0A0A', fontSize: 22, fontFamily: font.syneExtra }}>+</Text>
-      </Pressable>
-
       <Modal visible={sheet} animationType="slide" transparent onRequestClose={() => setSheet(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           <Pressable style={styles.sheetBackdropDim} onPress={() => setSheet(false)} />
@@ -911,7 +1138,13 @@ export default function FeedScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
-      <PostMediaViewerModal post={viewerPost} visible={Boolean(viewerPost)} onClose={() => setViewerPost(null)} />
+      <PostMediaViewerModal
+        post={viewerPost}
+        visible={Boolean(viewerPost)}
+        onClose={() => setViewerPost(null)}
+        canDelete={Boolean(viewerPost && (isAdmin || viewerPost.user_id === user?.id))}
+        onDelete={() => (viewerPost ? void deletePostAsAdmin(viewerPost.id) : undefined)}
+      />
     </View>
   );
 }
@@ -921,17 +1154,27 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   feedHeader: { paddingHorizontal: 18, paddingTop: 12 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  feedTitle: { fontSize: 23, letterSpacing: -0.35 },
+  feedTitle: { fontSize: 28, letterSpacing: -0.45, fontStyle: 'italic', textTransform: 'lowercase' },
   catFilterRow: { paddingHorizontal: 18, gap: 8, paddingBottom: 8 },
   catFilterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   sidequestListWrap: { paddingHorizontal: 18, paddingBottom: 16, gap: 10 },
   sidequestCard: { borderWidth: 1, borderRadius: 14, padding: 12 },
+  featuredCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 2 },
+  featuredTitle: { fontSize: 24, lineHeight: 30, marginTop: 6 },
+  feedHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+  feedAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  feedTypeBadge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginTop: 8 },
+  feedActionsRow: { marginTop: 10, borderTopWidth: 1, paddingTop: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  feedActionPill: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
   sidequestHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sidequestTitle: { fontSize: 18, lineHeight: 24, marginTop: 6 },
   sidequestTags: { marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   sidequestTag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
   previewRow: { marginTop: 10, flexDirection: 'row', gap: 6 },
   previewTile: { width: 54, height: 54, borderRadius: 8, overflow: 'hidden' },
+  flowingMedia: { width: '100%', aspectRatio: 4 / 3, borderRadius: 10, overflow: 'hidden' },
+  modRow: { marginTop: 8, flexDirection: 'row', gap: 8 },
+  modBtn: { borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12 },
   toggleWrap: { flexDirection: 'row', borderRadius: 20, padding: 3 },
   tb: { paddingVertical: 5, paddingHorizontal: 11, borderRadius: 16 },
   tbText: { fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', fontWeight: '700' },
@@ -1136,19 +1379,5 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
-  },
-  fabPost: {
-    position: 'absolute',
-    right: 16,
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
   },
 });

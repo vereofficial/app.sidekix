@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../src/context/AuthContext';
 import { useAppTheme } from '../src/context/AppThemeContext';
-import { HomeFlow } from '../src/flows/HomeFlow';
 import { hasCompletedOnboarding } from '../src/lib/onboardingStorage';
 import { isSupabaseConfigured } from '../src/lib/supabaseConfig';
 import { MissingConfigScreen } from '../src/screens/MissingConfigScreen';
@@ -53,8 +52,8 @@ export default function Index() {
 
   if (session) {
     if (!onboardingDone) return <Redirect href="/onboarding" />;
-    return <Redirect href="/feed" />;
+    return <Redirect href="/(tabs)/home" />;
   }
 
-  return <HomeFlow />;
+  return <Redirect href="/auth" />;
 }

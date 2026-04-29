@@ -37,6 +37,10 @@ export type SidequestRow = {
   title: string;
   categories: string[];
   is_anonymous: boolean;
+  approval_status: 'pending' | 'approved' | 'rejected';
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_note?: string | null;
   created_at: string;
 };
 

@@ -11,23 +11,23 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LeaderboardAvatar } from '../../src/components/LeaderboardAvatar';
-import { SundayLeadTeaserModal } from '../../src/components/SundayLeadTeaserModal';
-import { useAuth } from '../../src/context/AuthContext';
-import { useAppTheme } from '../../src/context/AppThemeContext';
+import { LeaderboardAvatar } from '../src/components/LeaderboardAvatar';
+import { SundayLeadTeaserModal } from '../src/components/SundayLeadTeaserModal';
+import { useAuth } from '../src/context/AuthContext';
+import { useAppTheme } from '../src/context/AppThemeContext';
 import {
   MIN_DISTINCT_REACTIONS_FOR_PRIZE,
   MIN_LEADERBOARD_USERS_FOR_PRIZE_POOL,
-} from '../../src/constants/weeklyPrize';
-import { useLeaderboard } from '../../src/hooks/useLeaderboard';
-import { useWeeklyReactionsGiven } from '../../src/hooks/useWeeklyReactionsGiven';
-import { openSidekixInstagramDm } from '../../src/lib/openSidekixInstagramDm';
-import { ordinalPlace } from '../../src/lib/ordinalRank';
-import { hasShownSundayLeadTeaser, markSundayLeadTeaserShown } from '../../src/lib/sundayLeadTeaser';
-import { mondayYmdOfWeekContaining } from '../../src/lib/week';
-import { mondayToSundayWeekProgress } from '../../src/lib/weekTimeline';
-import { reactionsLabel } from '../../src/lib/formatCount';
-import { font, getColors } from '../../src/theme';
+} from '../src/constants/weeklyPrize';
+import { useLeaderboard } from '../src/hooks/useLeaderboard';
+import { useWeeklyReactionsGiven } from '../src/hooks/useWeeklyReactionsGiven';
+import { openSidekixInstagramDm } from '../src/lib/openSidekixInstagramDm';
+import { ordinalPlace } from '../src/lib/ordinalRank';
+import { hasShownSundayLeadTeaser, markSundayLeadTeaserShown } from '../src/lib/sundayLeadTeaser';
+import { mondayYmdOfWeekContaining } from '../src/lib/week';
+import { mondayToSundayWeekProgress } from '../src/lib/weekTimeline';
+import { reactionsLabel } from '../src/lib/formatCount';
+import { font, getColors } from '../src/theme';
 
 /** Weekly board: always show at least ranks 1–5 (filled + open); expand toward 10 as people join. */
 const WEEK_LEADERBOARD_MIN_SLOTS = 5;

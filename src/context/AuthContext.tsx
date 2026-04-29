@@ -7,6 +7,7 @@ import { tryGetSupabase } from '../lib/supabase';
 import { getSupabasePublicConfig, isSupabaseConfigured } from '../lib/supabaseConfig';
 import { formatAuthError } from '../lib/formatAuthError';
 import { getOAuthRedirectUrl } from '../lib/oauthRedirect';
+import { isAdminEmail } from '../lib/admin';
 import type { ProfileRow } from '../types/database';
 
 type AuthCtx = {
@@ -15,6 +16,7 @@ type AuthCtx = {
   profile: ProfileRow | null;
   authLoading: boolean;
   profileLoading: boolean;
+  isAdmin: boolean;
   signInWithPhone: (e164Phone: string) => Promise<{ error: string | null }>;
   verifyPhoneOtp: (e164Phone: string, token: string) => Promise<{ error: string | null; profile: ProfileRow | null }>;
   saveProfile: (username: string, emoji?: string, avatarPath?: string | null) => Promise<{ error: string | null }>;
@@ -242,6 +244,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithOAuthProvider = useCallback(async (provider: 'google' | 'apple') => {
     const sb = tryGetSupabase();
     if (!sb) return { error: 'Not configured' };
+    const waitForSession = async (): Promise<Session | null> => {
+      for (let i = 0; i < 8; i += 1) {
+        const { data } = await sb.auth.getSession();
+        if (data.session) return data.session;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      return null;
+    };
 
     const redirectTo = getOAuthRedirectUrl();
     const { data, error } = await sb.auth.signInWithOAuth({
@@ -257,7 +267,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
     if (res.type !== 'success' || !res.url) {
+      const sess = await waitForSession();
+      if (sess) {
+        setSession(sess);
+        return { error: null };
+      }
       return { error: res.type === 'cancel' ? null : `${provider} sign in was not completed.` };
+    }
+    if (res.url.includes('joinsidekix.com')) {
+      const sess = await waitForSession();
+      if (sess) {
+        setSession(sess);
+        return { error: null };
+      }
+      return {
+        error:
+          'OAuth redirected to joinsidekix.com instead of the app. Add app callback URLs in Supabase Auth URL config and Google/Apple provider redirect allowlists.',
+      };
     }
 
     try {
@@ -277,11 +303,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /** Implicit flow: prefer tokens in fragment (no PKCE verifier needed on device). */
       if (accessToken && refreshToken) {
         const { error: setErr } = await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-        return { error: setErr ? formatAuthError(setErr.message) ?? setErr.message : null };
+        if (setErr) return { error: formatAuthError(setErr.message) ?? setErr.message };
+        const sess = await waitForSession();
+        if (sess) setSession(sess);
+        return { error: null };
       }
       if (code) {
         const { error: exErr } = await sb.auth.exchangeCodeForSession(code);
-        return { error: exErr ? formatAuthError(exErr.message) ?? exErr.message : null };
+        if (exErr) return { error: formatAuthError(exErr.message) ?? exErr.message };
+        const sess = await waitForSession();
+        if (sess) setSession(sess);
+        return { error: null };
+      }
+      const sess = await waitForSession();
+      if (sess) {
+        setSession(sess);
+        return { error: null };
       }
       return { error: `${provider} sign in did not return a session.` };
     } catch {
@@ -400,6 +437,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       authLoading,
       profileLoading,
+      isAdmin: isAdminEmail(session?.user?.email),
       signInWithPhone,
       verifyPhoneOtp,
       saveProfile,
@@ -415,6 +453,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       authLoading,
       profileLoading,
+      session?.user?.email,
       signInWithPhone,
       verifyPhoneOtp,
       saveProfile,

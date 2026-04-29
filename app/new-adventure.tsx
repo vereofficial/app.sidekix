@@ -91,17 +91,39 @@ export default function NewAdventureScreen() {
       Alert.alert('Publish failed', error.message);
       return;
     }
-    router.replace('/(tabs)/feed');
+    router.replace('/(tabs)/home');
   };
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <View style={styles.head}>
-        <Pressable onPress={() => router.back()}><Text style={{ color: colors.text1, fontSize: 18 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>I went on an adventure</Text>
+        <Pressable onPress={() => router.back()}><Text style={{ color: colors.text1, fontSize: 18 }}>← back</Text></Pressable>
+        <View style={[styles.typePill, { backgroundColor: '#fff2ec' }]}>
+          <Text style={{ color: '#c2580d', fontFamily: font.dmBold, fontSize: 11 }}>⚡ ADVENTURE</Text>
+        </View>
+        <Pressable disabled={!canPublish} onPress={() => void publish()} style={[styles.postBtn, { backgroundColor: '#b84d11', opacity: canPublish ? 1 : 0.5 }]}>
+          <Text style={{ color: '#fff', fontFamily: font.dmBold, fontSize: 14 }}>post</Text>
+        </Pressable>
       </View>
       <ScrollView contentContainerStyle={{ padding: 18, gap: 12 }}>
-        <Text style={{ color: colors.text2, fontFamily: font.syne, fontSize: 11 }}>choose sidequest</Text>
+        <Pressable style={[styles.mediaDrop, { borderColor: colors.border2, backgroundColor: colors.card }]} onPress={() => void pickMedia()}>
+          <Text style={{ color: colors.text3, fontFamily: font.dmBold, fontSize: 15 }}>📸</Text>
+          <Text style={{ color: colors.text2, fontFamily: font.dm, marginTop: 6 }}>
+            {mediaUri ? 'change photo or video' : 'add photo or video (optional)'}
+          </Text>
+          <Text style={{ color: colors.text3, fontFamily: font.mono, marginTop: 4, fontSize: 10 }}>max 30 sec · 720p</Text>
+        </Pressable>
+        <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4 }}>WHAT HAPPENED</Text>
+        <TextInput
+          placeholder="where'd you go, what happened, was it worth it?"
+          placeholderTextColor={colors.text3}
+          value={body}
+          onChangeText={setBody}
+          multiline
+          style={[styles.input, { color: colors.text1, borderColor: colors.border2, backgroundColor: colors.card, fontFamily: font.serifItalic }]}
+        />
+        <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4 }}>DID SOMEONE'S IDEA INSPIRE THIS?</Text>
+        <Text style={{ color: colors.text2, fontFamily: font.mono, fontSize: 11 }}>choose sidequest</Text>
         <View style={styles.row}>
           {sidequests.map((s) => (
             <Pressable
@@ -113,25 +135,14 @@ export default function NewAdventureScreen() {
             </Pressable>
           ))}
         </View>
-        <TextInput
-          placeholder="what happened?"
-          placeholderTextColor={colors.text3}
-          value={body}
-          onChangeText={setBody}
-          multiline
-          style={[styles.input, { color: colors.text1, borderColor: colors.border2, backgroundColor: colors.card, fontFamily: font.dm }]}
-        />
-        <Pressable style={[styles.mediaBtn, { borderColor: colors.border2 }]} onPress={() => void pickMedia()}>
-          <Text style={{ color: colors.text2, fontFamily: font.syne }}>{mediaUri ? 'change media' : 'add media (optional)'}</Text>
-        </Pressable>
-        <Pressable onPress={() => setAnonymous((x) => !x)}><Text style={{ color: colors.text2, fontFamily: font.dm }}>post as anonymous: {anonymous ? 'yes' : 'no'}</Text></Pressable>
-        <Pressable
-          disabled={!canPublish}
-          onPress={() => void publish()}
-          style={[styles.publish, { backgroundColor: canPublish ? colors.accent : colors.bg3 }]}
-        >
-          <Text style={{ color: canPublish ? (resolvedScheme === 'light' ? '#fff' : '#0A0A0A') : colors.text3, fontFamily: font.syne }}>publish</Text>
-        </Pressable>
+        <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4 }}>VISIBILITY</Text>
+        <Pressable onPress={() => setAnonymous((x) => !x)}><Text style={{ color: colors.text2, fontFamily: font.dm }}>journal only: {anonymous ? 'yes' : 'no'}</Text></Pressable>
+        <View style={[styles.noteBox, { borderColor: colors.border2, backgroundColor: colors.card }]}>
+          <Text style={{ color: '#2f6a48', fontFamily: font.dmBold }}>🗂 journal only option</Text>
+          <Text style={{ color: colors.text1, fontFamily: font.dm, marginTop: 6, lineHeight: 20 }}>
+            Keep adventures private in your personal sidequest journal. Great for ones just for you.
+          </Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -139,11 +150,14 @@ export default function NewAdventureScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  head: { paddingHorizontal: 18, paddingTop: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  head: { paddingHorizontal: 18, paddingTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ddd', paddingBottom: 12 },
   title: { fontSize: 18 },
+  typePill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  postBtn: { borderRadius: 12, paddingHorizontal: 18, paddingVertical: 10 },
   row: { gap: 8 },
   chip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
-  input: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 15, minHeight: 120, textAlignVertical: 'top' },
-  mediaBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  input: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 18, minHeight: 120, textAlignVertical: 'top', lineHeight: 30 },
+  mediaDrop: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 16, paddingVertical: 26, paddingHorizontal: 12, alignItems: 'center' },
+  noteBox: { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 6 },
   publish: { marginTop: 8, borderRadius: 999, paddingVertical: 14, alignItems: 'center' },
 });

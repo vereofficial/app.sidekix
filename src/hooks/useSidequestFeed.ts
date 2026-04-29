@@ -8,7 +8,7 @@ export type SidequestFeedRow = SidequestRow & {
   preview_posts: SidequestPostRow[];
 };
 
-export function useSidequestFeed(activeCategories: string[] = []) {
+export function useSidequestFeed(activeCategories: string[] = [], includePending = false) {
   const [rows, setRows] = useState<SidequestFeedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,9 +29,11 @@ export function useSidequestFeed(activeCategories: string[] = []) {
       setLoading(false);
       return;
     }
-    const sidequests = ((data ?? []) as SidequestRow[]).filter((s) =>
-      activeCategories.length === 0 ? true : activeCategories.some((c) => s.categories?.includes(c)),
-    );
+    const sidequests = ((data ?? []) as SidequestRow[]).filter((s) => {
+      const status = s.approval_status ?? 'approved';
+      if (!includePending && status !== 'approved') return false;
+      return activeCategories.length === 0 ? true : activeCategories.some((c) => s.categories?.includes(c));
+    });
     if (sidequests.length === 0) {
       setRows([]);
       setLoading(false);
@@ -67,7 +69,7 @@ export function useSidequestFeed(activeCategories: string[] = []) {
       }),
     );
     setLoading(false);
-  }, [activeCategories]);
+  }, [activeCategories, includePending]);
 
   useEffect(() => {
     void refresh();

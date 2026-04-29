@@ -274,7 +274,7 @@ export default function UploadScreen() {
             one post per sidequest. Catch reactions on the feed until the next drop (Mon or Fri).
           </Text>
           <Pressable
-            onPress={() => router.replace('/feed')}
+            onPress={() => router.replace('/(tabs)/home')}
             style={({ pressed }) => [
               styles.doneBtn,
               { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1 },

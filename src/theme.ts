@@ -66,13 +66,18 @@ export function getColors(scheme: ColorSchemeName): ThemeColors {
 }
 
 export const font = {
-  syne: 'Syne_700Bold',
-  syneExtra: 'Syne_800ExtraBold',
-  syneSemi: 'Syne_600SemiBold',
-  syneReg: 'Syne_400Regular',
+  syne: 'DMSans_700Bold',
+  syneExtra: 'DMSans_700Bold',
+  syneSemi: 'DMSans_500Medium',
+  syneReg: 'DMSans_400Regular',
   dm: 'DMSans_400Regular',
   dmMedium: 'DMSans_500Medium',
+  dmBold: 'DMSans_700Bold',
   dmLight: 'DMSans_300Light',
+  serif: 'InstrumentSerif_400Regular',
+  serifItalic: 'InstrumentSerif_400Regular_Italic',
+  mono: 'DMMono_400Regular',
+  monoMedium: 'DMMono_500Medium',
 };
 
 /** Gradient pairs matching mock `.img-1` … `.img-9` */

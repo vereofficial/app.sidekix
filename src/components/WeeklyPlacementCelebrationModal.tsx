@@ -94,7 +94,7 @@ export function WeeklyPlacementCelebrationModal({ visible, payload, onClose }: P
   const goRanks = () => {
     onClose();
     try {
-      router.replace('/(tabs)/lead');
+      router.replace('/lead');
     } catch {
       /* router may not be ready */
     }

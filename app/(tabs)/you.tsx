@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,7 +16,6 @@ import {
   Switch,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,33 +23,21 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useAppTheme, type ThemePreference } from '../../src/context/AppThemeContext';
 import { useMyPosts } from '../../src/hooks/useMyPosts';
 import { useReadableStorageUrl } from '../../src/hooks/useReadableStorageUrl';
-import { getHomeFeedMode, setHomeFeedMode, type HomeFeedMode } from '../../src/lib/homeFeedPreference';
-import { localCalendarYmd } from '../../src/lib/calendarDate';
 import { readLocalUriAsArrayBuffer } from '../../src/lib/readLocalMediaForUpload';
 import { computeSidequestPostStreak } from '../../src/lib/sidequestPeriod';
 import { tryGetSupabase } from '../../src/lib/supabase';
-import { PostMediaTile } from '../../src/components/PostMediaTile';
 import { statSidequestsKey, statReactionsKey } from '../../src/lib/formatCount';
 import { hapticLight } from '../../src/lib/haptics';
 import { font, getColors } from '../../src/theme';
 
-const TABLET_CONTENT_MAX = 640;
-const SUBMISSIONS_GRID_GAP = 8;
-
-export default function ProfileScreen() {
+export default function YouScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { height: winH, width: winW } = useWindowDimensions();
   const { resolvedScheme, preference, setPreference } = useAppTheme();
   const colors = getColors(resolvedScheme);
   const scheme = resolvedScheme;
   const { user, profile, signOut, deleteAccount, setFriendsOnly, saveProfile, refreshProfile } = useAuth();
-  const { posts, loading, refresh } = useMyPosts(user?.id);
-  const contentW = Math.min(winW, TABLET_CONTENT_MAX);
-  const submissionTileSize =
-    posts.length >= 3
-      ? Math.max(100, Math.floor((contentW - 36 - SUBMISSIONS_GRID_GAP * 2) / 3))
-      : 140;
+  const { posts, refresh } = useMyPosts(user?.id);
   const { displayUri: savedAvatarUrl, onLoadError: onAvatarError } = useReadableStorageUrl(
     profile?.avatar_path ?? null,
   );
@@ -64,9 +51,6 @@ export default function ProfileScreen() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [stats, setStats] = useState({ sidequests: 0, reactions: 0, won: 0, streak: 0 });
-  const [homeModePref, setHomeModePref] = useState<HomeFeedMode>('feed');
-  const [calendarCursor, setCalendarCursor] = useState(() => new Date());
-  const [selectedYmd, setSelectedYmd] = useState(() => localCalendarYmd());
 
   useEffect(() => {
     setDraft(profile?.username ?? '');
@@ -75,18 +59,6 @@ export default function ProfileScreen() {
   useEffect(() => {
     setAvatarUri(null);
   }, [profile?.avatar_path]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const m = await getHomeFeedMode(user?.id ?? null);
-      if (!cancelled) setHomeModePref(m);
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -211,38 +183,6 @@ export default function ProfileScreen() {
 
   const cyclePref = (p: ThemePreference) => setPreference(p);
 
-  const monthMeta = useMemo(() => {
-    const d = new Date(calendarCursor);
-    d.setDate(1);
-    const startDow = d.getDay();
-    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    const ymds: string[] = [];
-    for (let i = 0; i < daysInMonth; i++) {
-      const cur = new Date(d);
-      cur.setDate(d.getDate() + i);
-      ymds.push(localCalendarYmd(cur));
-    }
-    return {
-      label: d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
-      startDow,
-      daysInMonth,
-      ymds,
-    };
-  }, [calendarCursor]);
-
-  const postsByYmd = useMemo(() => {
-    const map = new Map<string, typeof posts>();
-    posts.forEach((p) => {
-      const ymd = localCalendarYmd(new Date(p.created_at));
-      const cur = map.get(ymd) ?? [];
-      cur.push(p);
-      map.set(ymd, cur);
-    });
-    return map;
-  }, [posts]);
-
-  const selectedDayPosts = useMemo(() => postsByYmd.get(selectedYmd) ?? [], [postsByYmd, selectedYmd]);
-
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <ScrollView
@@ -250,7 +190,7 @@ export default function ProfileScreen() {
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 24, alignItems: 'center' }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPull} tintColor={colors.accent} />}
       >
-        <View style={{ width: '100%', maxWidth: TABLET_CONTENT_MAX }}>
+        <View style={{ width: '100%', maxWidth: 640 }}>
         <View style={styles.header}>
           <View style={styles.top}>
             <Pressable onPress={() => setSheet(true)}>
@@ -294,8 +234,8 @@ export default function ProfileScreen() {
               </Text>
             </View>
             <View style={styles.statCell}>
-              <Text style={[styles.statValue, { color: colors.text1, fontFamily: font.syneExtra }]}>{`${stats.won}X`}</Text>
-              <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>WON</Text>
+              <Text style={[styles.statValue, { color: colors.text1, fontFamily: font.syneExtra }]}>{stats.won}</Text>
+              <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>TIMES DONE</Text>
             </View>
           </View>
 
@@ -343,31 +283,6 @@ export default function ProfileScreen() {
               </Pressable>
             ))}
           </View>
-          <Text style={[styles.sectionLabel, { color: colors.text3, fontFamily: font.syne, marginTop: 14 }]}>default home</Text>
-          <View style={[styles.themeRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {(['feed', 'recent'] as const).map((m) => (
-              <Pressable
-                key={m}
-                onPress={() => {
-                  hapticLight();
-                  setHomeModePref(m);
-                  void setHomeFeedMode(user?.id ?? null, m);
-                }}
-                style={[styles.themeChip, homeModePref === m && { backgroundColor: colors.accent }, { borderColor: colors.border2 }]}
-              >
-                <Text
-                  style={[
-                    styles.themeChipText,
-                    { fontFamily: font.syne },
-                    { color: homeModePref === m ? (scheme === 'light' ? '#fff' : '#0a0a0a') : colors.text2 },
-                  ]}
-                >
-                  {m}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
           <Pressable
             onPress={() => setAccountOpen(true)}
             style={[styles.accountBtn, { borderColor: colors.border2, backgroundColor: colors.card }]}
@@ -375,133 +290,6 @@ export default function ProfileScreen() {
             <Text style={{ color: colors.text2, fontFamily: font.syne, fontWeight: '700' }}>account</Text>
           </Pressable>
         </View>
-
-        <View style={[styles.sh, { marginTop: 8 }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text3, fontFamily: font.syne }]}>calendar</Text>
-        </View>
-        <View style={[styles.calendarWrap, { borderColor: colors.border2, backgroundColor: colors.card }]}>
-          <View style={styles.calendarHead}>
-            <Pressable
-              onPress={() => {
-                const d = new Date(calendarCursor);
-                d.setMonth(d.getMonth() - 1);
-                setCalendarCursor(d);
-              }}
-            >
-              <Text style={{ color: colors.text2, fontFamily: font.syne }}>←</Text>
-            </Pressable>
-            <Text style={{ color: colors.text1, fontFamily: font.syneExtra }}>{monthMeta.label}</Text>
-            <Pressable
-              onPress={() => {
-                const d = new Date(calendarCursor);
-                d.setMonth(d.getMonth() + 1);
-                setCalendarCursor(d);
-              }}
-            >
-              <Text style={{ color: colors.text2, fontFamily: font.syne }}>→</Text>
-            </Pressable>
-          </View>
-          <View style={styles.calendarGrid}>
-            {Array.from({ length: monthMeta.startDow }).map((_, i) => (
-              <View key={`blank-${i}`} style={styles.calendarCell} />
-            ))}
-            {monthMeta.ymds.map((ymd, idx) => {
-              const hasPosts = (postsByYmd.get(ymd)?.length ?? 0) > 0;
-              const isSelected = selectedYmd === ymd;
-              return (
-                <Pressable
-                  key={ymd}
-                  onPress={() => setSelectedYmd(ymd)}
-                  style={[
-                    styles.calendarCell,
-                    isSelected && { backgroundColor: colors.accentMuted, borderRadius: 8 },
-                  ]}
-                >
-                  <Text style={{ color: colors.text1, fontFamily: font.dm, fontSize: 12 }}>{idx + 1}</Text>
-                  {hasPosts ? <View style={[styles.calendarDot, { backgroundColor: colors.accent }]} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={[styles.calendarSelected, { borderTopColor: colors.border2 }]}>
-            <Text style={{ color: colors.text2, fontFamily: font.syne, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.7 }}>
-              {selectedYmd}
-            </Text>
-            <Text style={{ color: colors.text1, fontFamily: font.dm, marginTop: 4 }}>
-              {selectedDayPosts.length === 0
-                ? 'no sidequests completed'
-                : `${selectedDayPosts.length} ${selectedDayPosts.length === 1 ? 'sidequest' : 'sidequests'} completed`}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.sh}>
-          <Text style={[styles.sectionTitle, { color: colors.text3, fontFamily: font.syne }]}>your submissions</Text>
-        </View>
-        {loading ? (
-          <ActivityIndicator color={colors.accent} style={{ marginVertical: 20 }} />
-        ) : posts.length === 0 ? (
-          <View style={[styles.submissionsEmptyFlex, { minHeight: Math.max(220, winH - insets.top - 420) }]}>
-            <View style={styles.submissionsEmptyInner}>
-              <Text style={[styles.submissionsEmptyTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
-                nothing here yet
-              </Text>
-              <Text style={[styles.submissionsEmptySub, { color: colors.text2, fontFamily: font.dm }]}>
-                all of your posts show up here. peek at what everyone&apos;s doing in the meantime.
-              </Text>
-              <Pressable onPress={() => router.push('/feed')}>
-                <Text style={[styles.submissionsEmptyCta, { color: colors.accent, fontFamily: font.syne }]}>
-                  see campus feed →
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : posts.length < 3 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.submissionsRow}
-          >
-            {posts.map((p) => (
-              <Pressable
-                key={p.id}
-                onPress={() => router.push(`/submission/${p.id}`)}
-                style={[styles.cellLarge, { borderColor: colors.border2 }]}
-              >
-                <PostMediaTile post={p} style={styles.submissionThumbFill} borderRadius={12} />
-              </Pressable>
-            ))}
-          </ScrollView>
-        ) : (
-          <View
-            style={[
-              styles.grid,
-              {
-                paddingHorizontal: 18,
-                columnGap: SUBMISSIONS_GRID_GAP,
-                rowGap: SUBMISSIONS_GRID_GAP,
-                justifyContent: 'flex-start',
-              },
-            ]}
-          >
-            {posts.map((p) => (
-              <Pressable
-                key={p.id}
-                onPress={() => router.push(`/submission/${p.id}`)}
-                style={[
-                  styles.submissionCell,
-                  {
-                    width: submissionTileSize,
-                    height: submissionTileSize,
-                    borderColor: colors.border2,
-                  },
-                ]}
-              >
-                <PostMediaTile post={p} style={styles.submissionThumbFill} borderRadius={6} />
-              </Pressable>
-            ))}
-          </View>
-        )}
         </View>
       </ScrollView>
 
@@ -731,70 +519,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
   },
-  sh: { paddingHorizontal: 18, paddingTop: 4, paddingBottom: 8 },
-  sectionTitle: { fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase' },
-  calendarWrap: {
-    marginHorizontal: 18,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 8,
-  },
-  calendarHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  calendarCell: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calendarDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 2,
-  },
-  calendarSelected: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-  },
-  submissionsRow: {
-    paddingHorizontal: 18,
-    gap: 10,
-    paddingBottom: 4,
-  },
-  cellLarge: {
-    width: 140,
-    height: 140,
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  submissionThumbFill: { width: '100%', height: '100%' },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  submissionCell: {
-    borderRadius: 6,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  empty: { paddingHorizontal: 18, paddingVertical: 12, fontSize: 13 },
-  submissionsEmptyFlex: { justifyContent: 'center', paddingHorizontal: 22 },
-  submissionsEmptyInner: { alignItems: 'center', paddingVertical: 12, marginTop: -24 },
-  submissionsEmptyTitle: { fontSize: 17, marginBottom: 8, letterSpacing: -0.2, textAlign: 'center' },
-  submissionsEmptySub: { fontSize: 13, lineHeight: 20, marginBottom: 14, textAlign: 'center' },
-  submissionsEmptyCta: { fontSize: 13, letterSpacing: 0.4, fontWeight: '700', textAlign: 'center' },
   sheetBackdropDim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.65)',

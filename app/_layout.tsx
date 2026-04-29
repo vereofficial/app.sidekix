@@ -2,7 +2,10 @@ import {
   DMSans_300Light,
   DMSans_400Regular,
   DMSans_500Medium,
+  DMSans_700Bold,
 } from '@expo-google-fonts/dm-sans';
+import { DMMono_400Regular, DMMono_500Medium } from '@expo-google-fonts/dm-mono';
+import { InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
 import {
   Syne_400Regular,
   Syne_600SemiBold,
@@ -108,14 +111,18 @@ function NavigationShell() {
           }}
         >
           <Stack.Screen name="index" />
+          <Stack.Screen name="auth" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="today" />
+          <Stack.Screen name="lead" />
           <Stack.Screen name="upload" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="post-choice" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="new-sidequest" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="new-adventure" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="new-sidequest" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+          <Stack.Screen name="new-adventure" options={{ presentation: 'card', animation: 'slide_from_right' }} />
           <Stack.Screen name="onboarding" options={{ presentation: 'card', animation: 'fade' }} />
           <Stack.Screen name="sharecard" />
           <Stack.Screen name="sidequest/[id]" />
+          <Stack.Screen name="challenge/[id]" />
           <Stack.Screen name="p/[id]" />
         </Stack>
       </NavThemeProvider>
@@ -191,6 +198,11 @@ export default function RootLayout() {
     DMSans_300Light,
     DMSans_400Regular,
     DMSans_500Medium,
+    DMSans_700Bold,
+    DMMono_400Regular,
+    DMMono_500Medium,
+    InstrumentSerif_400Regular,
+    InstrumentSerif_400Regular_Italic,
   });
 
   useEffect(() => {

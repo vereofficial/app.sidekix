@@ -14,23 +14,23 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { challengeTag, splitChallengeTitle } from '../../src/challenge';
-import { useAuth } from '../../src/context/AuthContext';
-import { useAppTheme } from '../../src/context/AppThemeContext';
-import { useMyPosts } from '../../src/hooks/useMyPosts';
-import { usePostCount } from '../../src/hooks/usePostCount';
-import { usePostsForChallenge } from '../../src/hooks/usePostsForChallenge';
-import { usePastChallenges } from '../../src/hooks/usePastChallenges';
-import { useTodayChallenge } from '../../src/hooks/useTodayChallenge';
-import { PostMediaTile } from '../../src/components/PostMediaTile';
-import { PostMediaViewerModal } from '../../src/components/PostMediaViewerModal';
-import { SidekixTabState } from '../../src/components/SidekixTabState';
-import { Wordmark } from '../../src/components/Wordmark';
-import { pastChallengePostCountSuffix, reactionsLabel } from '../../src/lib/formatCount';
-import { msUntilActiveSidequestDeadline, sidequestDeadlineSentence } from '../../src/lib/sidequestPeriod';
-import { tryGetSupabase } from '../../src/lib/supabase';
-import { font, getColors } from '../../src/theme';
-import type { PostRow } from '../../src/types/database';
+import { challengeTag, splitChallengeTitle } from '../src/challenge';
+import { useAuth } from '../src/context/AuthContext';
+import { useAppTheme } from '../src/context/AppThemeContext';
+import { useMyPosts } from '../src/hooks/useMyPosts';
+import { usePostCount } from '../src/hooks/usePostCount';
+import { usePostsForChallenge } from '../src/hooks/usePostsForChallenge';
+import { usePastChallenges } from '../src/hooks/usePastChallenges';
+import { useTodayChallenge } from '../src/hooks/useTodayChallenge';
+import { PostMediaTile } from '../src/components/PostMediaTile';
+import { PostMediaViewerModal } from '../src/components/PostMediaViewerModal';
+import { SidekixTabState } from '../src/components/SidekixTabState';
+import { Wordmark } from '../src/components/Wordmark';
+import { pastChallengePostCountSuffix, reactionsLabel } from '../src/lib/formatCount';
+import { msUntilActiveSidequestDeadline, sidequestDeadlineSentence } from '../src/lib/sidequestPeriod';
+import { tryGetSupabase } from '../src/lib/supabase';
+import { font, getColors } from '../src/theme';
+import type { PostRow } from '../src/types/database';
 
 const TABLET_CONTENT_MAX = 560;
 
@@ -68,7 +68,7 @@ export default function TodayScreen() {
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
   const scheme = resolvedScheme;
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { challenge, loading: chLoad, error: chErr, refresh: refCh } = useTodayChallenge();
   const { count: postCount, loading: postCountLoad, refresh: refCount } = usePostCount(challenge?.id ?? null);
   const { posts: recent, loading: recLoad, refresh: refRecent } = usePostsForChallenge(
@@ -290,6 +290,15 @@ export default function TodayScreen() {
     setRefreshing(true);
     await Promise.all([refCh(), refCount(), refRecent(), refPast(), refMyPosts()]);
     setRefreshing(false);
+  };
+
+  const deletePost = async (postId: string) => {
+    const sb = tryGetSupabase();
+    if (!sb) return;
+    const { error } = await sb.from('posts').delete().eq('id', postId);
+    if (error) return;
+    if (viewerPost?.id === postId) setViewerPost(null);
+    void Promise.all([refRecent(), refCount(), refMyPosts()]);
   };
 
   const renderChallengeHeading = (centered: boolean) =>
@@ -651,7 +660,13 @@ export default function TodayScreen() {
         ) : null}
         </View>
       </ScrollView>
-      <PostMediaViewerModal post={viewerPost} visible={Boolean(viewerPost)} onClose={() => setViewerPost(null)} />
+      <PostMediaViewerModal
+        post={viewerPost}
+        visible={Boolean(viewerPost)}
+        onClose={() => setViewerPost(null)}
+        canDelete={Boolean(viewerPost && (isAdmin || viewerPost.user_id === user?.id))}
+        onDelete={() => (viewerPost ? void deletePost(viewerPost.id) : undefined)}
+      />
     </View>
   );
 }

@@ -187,7 +187,7 @@ export default function ShareCardScreen() {
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 36 }} showsVerticalScrollIndicator={false}>
         <View style={styles.head}>
-          <Pressable onPress={() => router.replace('/(tabs)/today')} hitSlop={12}>
+          <Pressable onPress={() => router.replace('/today')} hitSlop={12}>
             <Text style={{ fontSize: 18, color: colors.text1 }}>←</Text>
           </Pressable>
           <Text style={[styles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>share card</Text>

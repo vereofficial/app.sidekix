@@ -68,7 +68,7 @@ function weeklyTenAmTrigger(weekday: number): Notifications.WeeklyTriggerInput {
 
 async function openFeedTab() {
   try {
-    router.replace('/(tabs)/feed');
+    router.replace('/(tabs)/home');
   } catch {
     /* router may not be ready */
   }
@@ -78,7 +78,7 @@ async function openTodayForSidequestDrop() {
   await clearChallengeDropDismissed();
   await requestChallengeDropForceReveal();
   try {
-    router.replace('/(tabs)/today');
+    router.replace('/today');
   } catch {
     /* router may not be ready */
   }
@@ -86,7 +86,7 @@ async function openTodayForSidequestDrop() {
 
 async function openLeadTab() {
   try {
-    router.replace('/(tabs)/lead');
+    router.replace('/lead');
   } catch {
     /* router may not be ready */
   }

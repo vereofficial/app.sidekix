@@ -11,10 +11,14 @@ export function PostMediaViewerModal({
   post,
   visible,
   onClose,
+  canDelete = false,
+  onDelete,
 }: {
   post: PostRow | null;
   visible: boolean;
   onClose: () => void;
+  canDelete?: boolean;
+  onDelete?: () => void;
 }) {
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
@@ -62,6 +66,11 @@ export function PostMediaViewerModal({
               <Text style={[styles.closeText, { color: '#fff', fontFamily: font.syne }]}>close</Text>
             </Pressable>
           </View>
+          {canDelete ? (
+            <Pressable onPress={onDelete} style={styles.deleteBtn}>
+              <Text style={[styles.deleteText, { fontFamily: font.syne }]}>remove post</Text>
+            </Pressable>
+          ) : null}
           <View style={styles.mediaWrap}>
             {isVideo ? (
               visible && videoMedia.displayUri ? (
@@ -146,6 +155,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
+  },
+  deleteBtn: {
+    alignSelf: 'flex-end',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,80,80,0.2)',
+    marginBottom: 8,
+  },
+  deleteText: {
+    color: '#ff8f8f',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
   },
   mediaWrap: {
     width: '100%',
