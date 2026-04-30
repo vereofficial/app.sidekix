@@ -21,44 +21,47 @@ export type ThemeColors = {
 };
 
 export const darkColors: ThemeColors = {
+  /** Primary accent — lime (Expo / Sidekix original) */
   accent: '#D4FF3F',
-  accentMuted: '#D4FF3F22',
+  accentMuted: 'rgba(212,255,63,0.18)',
   bg: '#0A0A0A',
   bg2: '#111111',
   bg3: '#161616',
   card: '#141414',
-  border: '#1e1e1e',
-  border2: '#2a2a2a',
-  text1: '#ffffff',
-  text2: '#888888',
+  border: 'rgba(255,255,255,0.08)',
+  border2: 'rgba(255,255,255,0.12)',
+  text1: '#F0EDE6',
+  text2: '#8A8680',
   /** Tertiary; must stay readable on #0A0A0A (e.g. 10px uppercase challenge tags). */
-  text3: '#6E6E6E',
-  navBg: '#0e0e0e',
-  navBorder: '#1a1a1a',
-  pillBg: '#1a1a1a',
-  lightAccent: '#D4FF3F',
-  lightAccentBg: '#D4FF3F08',
-  lightAccentBorder: '#D4FF3F30',
+  text3: '#5A5755',
+  navBg: '#0E0E0E',
+  navBorder: 'rgba(255,255,255,0.08)',
+  pillBg: '#1A1A1A',
+  /** Secondary — blue (ideas / links) */
+  lightAccent: '#2563A8',
+  lightAccentBg: 'rgba(37,99,168,0.10)',
+  lightAccentBorder: 'rgba(37,99,168,0.25)',
 };
 
 export const lightColors: ThemeColors = {
-  accent: '#5a7a00',
-  accentMuted: '#5a7a0022',
+  /** Primary accent — olive green (light mode original) */
+  accent: '#5A7A00',
+  accentMuted: 'rgba(90,122,0,0.12)',
   bg: '#F2F1EC',
   bg2: '#ECEAE3',
   bg3: '#E5E3DC',
-  card: '#ffffff',
+  card: '#FFFFFF',
   border: '#E0DDD4',
   border2: '#D0CEC5',
-  text1: '#1a1a1a',
+  text1: '#1A1A1A',
   text2: '#666666',
   text3: '#999999',
-  navBg: '#ffffff',
+  navBg: '#FFFFFF',
   navBorder: '#E8E6DF',
   pillBg: '#E8E6DF',
-  lightAccent: '#5a7a00',
-  lightAccentBg: '#5a7a0008',
-  lightAccentBorder: '#5a7a0030',
+  lightAccent: '#2563A8',
+  lightAccentBg: 'rgba(37,99,168,0.08)',
+  lightAccentBorder: 'rgba(37,99,168,0.20)',
 };
 
 export function getColors(scheme: ColorSchemeName): ThemeColors {

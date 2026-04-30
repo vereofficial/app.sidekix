@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import type { SidequestRow } from '../src/types/database';
 
 export default function NewAdventureScreen() {
   const router = useRouter();
+  const { sidequestId: preselectedSidequestId } = useLocalSearchParams<{ sidequestId?: string }>();
   const insets = useSafeAreaInsets();
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
@@ -30,10 +31,14 @@ export default function NewAdventureScreen() {
       const sb = tryGetSupabase();
       if (!sb) return;
       const { data } = await sb.from('sidequests').select('*').order('created_at', { ascending: false }).limit(30);
-      setSidequests((data ?? []) as SidequestRow[]);
+      const rows = (data ?? []) as SidequestRow[];
+      setSidequests(rows);
+      if (preselectedSidequestId && rows.some((r) => r.id === preselectedSidequestId)) {
+        setSidequestId(preselectedSidequestId);
+      }
     };
     void load();
-  }, []);
+  }, [preselectedSidequestId]);
 
   const pickMedia = async () => {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.9 });

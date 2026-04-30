@@ -54,8 +54,8 @@ export function HomeFlow() {
 
   const bannerHeadline =
     postCount < 10
-      ? 'Be one of the first to post this sidequest'
-      : `${postCount} ${postCount === 1 ? 'person has' : 'people have'} posted this sidequest`;
+      ? 'See what your community is doing'
+      : `${postCount} ${postCount === 1 ? 'person has' : 'people have'} shared a sidequest`;
 
   const guestGridGap = 7;
   const guestTileWidth = Math.max(0, (windowWidth - 36 - guestGridGap) / 2);
@@ -134,7 +134,7 @@ export function HomeFlow() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.bannerStrong, { color: colors.text1, fontFamily: font.syne }]}>{bannerHeadline}</Text>
               <Text style={[styles.bannerSub, { color: colors.text2, fontFamily: font.dm }]}>
-                Sign up to see posts and join the leaderboard.
+                Sign up to view, post, and save sidequests.
               </Text>
             </View>
             <Animated.View style={{ transform: [{ scale: joinScale }] }}>
@@ -258,14 +258,12 @@ export function HomeFlow() {
         <View style={styles.obScrollTop}>
           <Text style={styles.obEmoji}>⚡</Text>
           <Text style={[styles.obTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
-            every <Text style={{ color: colors.accent, fontStyle: 'normal' }}>mon & fri</Text> at{' '}
-            <Text style={{ color: colors.accent, fontStyle: 'normal' }}>10am</Text> a new{' '}
-            <Text style={{ color: colors.accent, fontStyle: 'normal' }}>sidequest</Text> drops.
+            discover sidequests,
+            {'\n'}
+            then share your adventures.
           </Text>
           <Text style={[styles.obSub, { color: colors.text2, fontFamily: font.dm }]}>
-            post your take. see what campus is doing.
-            {'\n'}
-            win a weekly prize.
+            save ideas for later or post what you tried.
           </Text>
         </View>
         <View style={styles.obScrollBottom}>
