@@ -5,6 +5,7 @@
   "scripts": {
     "build": "expo export --platform web",
     "start": "expo start",
+    "start:clear": "expo start --clear",
     "start:tunnel": "expo start --tunnel",
     "start:lan": "expo start --lan",
     "android": "expo start --android",
@@ -21,7 +22,8 @@
     "eas:update:preview": "npx eas update --channel preview",
     "eas:update:dev": "npx eas update --channel development",
     "broadcast:push": "node scripts/send-broadcast.mjs",
-    "supabase:functions:deploy:broadcast": "npx supabase functions deploy broadcast-expo-push"
+    "supabase:functions:deploy:broadcast": "npx supabase functions deploy broadcast-expo-push",
+    "supabase:functions:deploy:r2-presign": "npx supabase functions deploy r2-media-presign"
   },
   "dependencies": {
     "@expo-google-fonts/dm-mono": "^0.4.2",

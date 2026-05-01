@@ -72,8 +72,9 @@ export default function SubmissionDetailScreen() {
             setDeleting(true);
             try {
               const paths = [post.image_path, post.video_path].filter((p): p is string => Boolean(p?.trim()));
-              if (paths.length > 0) {
-                const { error: stErr } = await sb.storage.from('post-media').remove(paths);
+              const supabaseOnly = paths.filter((p) => !p.startsWith('r2/'));
+              if (supabaseOnly.length > 0) {
+                const { error: stErr } = await sb.storage.from('post-media').remove(supabaseOnly);
                 if (stErr) throw stErr;
               }
               const { error: delErr } = await sb.from('posts').delete().eq('id', post.id).eq('user_id', user.id);

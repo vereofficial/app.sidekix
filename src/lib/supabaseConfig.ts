@@ -3,6 +3,10 @@ import Constants from 'expo-constants';
 type Extra = {
   supabaseUrl?: string;
   supabaseAnonKey?: string;
+  /** Same as EXPO_PUBLIC_USE_R2_MEDIA when baked into the manifest. */
+  useR2Media?: boolean;
+  /** Same as EXPO_PUBLIC_R2_PUBLIC_MEDIA_URL when baked into the manifest. */
+  r2PublicMediaUrl?: string;
 };
 
 function readExtra(): Extra {

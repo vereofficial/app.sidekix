@@ -68,7 +68,7 @@ function weeklyTenAmTrigger(weekday: number): Notifications.WeeklyTriggerInput {
 
 async function openFeedTab() {
   try {
-    router.replace('/(tabs)/home');
+    router.replace('/(tabs)/feed');
   } catch {
     /* router may not be ready */
   }

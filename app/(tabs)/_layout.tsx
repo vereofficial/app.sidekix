@@ -41,7 +41,18 @@ export default function TabLayout() {
           name="home"
           options={{
             title: 'Home',
-            tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={24} color={color} />,
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="feed"
+          options={{
+            title: 'Feed',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'infinite' : 'infinite-outline'} size={24} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
@@ -49,13 +60,6 @@ export default function TabLayout() {
           options={{
             title: 'Post',
             tabBarIcon: ({ color }) => <Ionicons name="add-circle-outline" size={26} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="journal"
-          options={{
-            title: 'Journal',
-            tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" size={24} color={color} />,
           }}
         />
         <Tabs.Screen

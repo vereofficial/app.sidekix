@@ -23,6 +23,11 @@ export function statSidequestsKey(n: number): string {
   return n === 1 ? 'CHALLENGE' : 'CHALLENGES';
 }
 
+/** Profile stat row: TIME CREDITED vs TIMES CREDITED. */
+export function statTimesCreditedKey(n: number): string {
+  return n === 1 ? 'TIME CREDITED' : 'TIMES CREDITED';
+}
+
 export function statReactionsKey(n: number): string {
   return n === 1 ? 'REACTION' : 'REACTIONS';
 }

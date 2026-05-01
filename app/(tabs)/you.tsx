@@ -22,11 +22,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/context/AuthContext';
 import { useAppTheme, type ThemePreference } from '../../src/context/AppThemeContext';
 import { useMyPosts } from '../../src/hooks/useMyPosts';
+import { MyPostsJournal } from '../../src/components/MyPostsJournal';
 import { useReadableStorageUrl } from '../../src/hooks/useReadableStorageUrl';
-import { readLocalUriAsArrayBuffer } from '../../src/lib/readLocalMediaForUpload';
-import { computeSidequestPostStreak } from '../../src/lib/sidequestPeriod';
 import { tryGetSupabase } from '../../src/lib/supabase';
-import { statSidequestsKey, statReactionsKey } from '../../src/lib/formatCount';
+import { uploadPostMediaFromUri } from '../../src/lib/uploadPostMedia';
+import { statSidequestsKey, statTimesCreditedKey } from '../../src/lib/formatCount';
 import { hapticLight } from '../../src/lib/haptics';
 import { font, getColors } from '../../src/theme';
 
@@ -49,8 +49,7 @@ export default function YouScreen() {
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [avatarMime, setAvatarMime] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [stats, setStats] = useState({ sidequests: 0, reactions: 0, won: 0, streak: 0 });
+  const [stats, setStats] = useState({ sidequests: 0, ideas: 0, credited: 0 });
 
   useEffect(() => {
     setDraft(profile?.username ?? '');
@@ -64,22 +63,18 @@ export default function YouScreen() {
     const loadStats = async () => {
       const sb = tryGetSupabase();
       if (!sb || !user?.id) {
-        setStats({ sidequests: 0, reactions: 0, won: 0, streak: 0 });
+        setStats({ sidequests: 0, ideas: 0, credited: 0 });
         return;
       }
       const challengeIds = [...new Set(posts.map((p) => p.challenge_id))];
       const sidequests = challengeIds.length;
-      let reactions = 0;
-      let won = 0;
-      let streak = 0;
-
-      if (posts.length > 0) {
-        const { data: myVotes } = await sb.from('votes').select('post_id').in(
-          'post_id',
-          posts.map((p) => p.id),
-        );
-        reactions = (myVotes ?? []).length;
-      }
+      let ideas = 0;
+      let credited = 0;
+      const { count: ideasCount } = await sb
+        .from('sidequests')
+        .select('id', { count: 'exact', head: true })
+        .eq('creator_id', user.id);
+      ideas = ideasCount ?? 0;
 
       if (challengeIds.length > 0) {
         const { data: challengePosts } = await sb
@@ -104,14 +99,10 @@ export default function YouScreen() {
               bestByChallenge.set(p.challenge_id, { userId: p.user_id, score });
             }
           });
-          won = [...bestByChallenge.values()].filter((r) => r.userId === user.id).length;
+          credited = [...bestByChallenge.values()].filter((r) => r.userId === user.id).length;
         }
-
-        const { data: chDayRows } = await sb.from('challenges').select('day').in('id', challengeIds);
-        const postedChallengeDays = new Set((chDayRows ?? []).map((r: { day: string }) => r.day));
-        streak = computeSidequestPostStreak(postedChallengeDays);
       }
-      setStats({ sidequests, reactions, won, streak });
+      setStats({ sidequests, ideas, credited });
     };
     void loadStats();
   }, [posts, user?.id]);
@@ -153,18 +144,15 @@ export default function YouScreen() {
       }
       const path = `${user.id}/avatar-${Date.now()}.jpg`;
       try {
-        const body = await readLocalUriAsArrayBuffer(avatarUri);
         const contentType = (avatarMime && avatarMime.length > 0 ? avatarMime : null) ?? 'image/jpeg';
-        const { error: upErr } = await sb.storage.from('post-media').upload(path, body, {
+        const { pathForDb } = await uploadPostMediaFromUri({
+          supabase: sb,
+          userId: user.id,
+          objectKey: path,
+          fileUri: avatarUri,
           contentType,
-          upsert: true,
         });
-        if (upErr) {
-          setBusy(false);
-          setErr(upErr.message);
-          return;
-        }
-        uploadedAvatarPath = path;
+        uploadedAvatarPath = pathForDb;
       } catch (e) {
         setBusy(false);
         setErr(e instanceof Error ? e.message : 'Could not read your photo.');
@@ -227,37 +215,26 @@ export default function YouScreen() {
             </View>
             <View style={[styles.statCell, { borderRightWidth: 1, borderRightColor: colors.border2 }]}>
               <Text style={[styles.statValue, { color: colors.accent, fontFamily: font.syneExtra }]}>
-                {stats.reactions.toLocaleString()}
+                {stats.ideas.toLocaleString()}
               </Text>
               <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>
-                {statReactionsKey(stats.reactions)}
+                ideas
               </Text>
             </View>
             <View style={styles.statCell}>
-              <Text style={[styles.statValue, { color: colors.text1, fontFamily: font.syneExtra }]}>{stats.won}</Text>
-              <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>TIMES DONE</Text>
-            </View>
-          </View>
-
-          <View style={[styles.streakRow, { borderColor: colors.border2, backgroundColor: colors.card }]}>
-            <Text style={styles.streakEmoji}>🔥</Text>
-            <Text style={[styles.streakHint, { color: colors.text3, fontFamily: font.dm }]}>
-              {stats.streak > 0 ? 'post each sidequest to keep it going' : 'post to start your streak'}
-            </Text>
-            <View style={[styles.streakPill, { backgroundColor: colors.accent }]}>
-              <Text
-                style={[
-                  styles.streakPillText,
-                  { color: scheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syneExtra },
-                ]}
-              >
-                {stats.streak}
+              <Text style={[styles.statValue, { color: colors.text1, fontFamily: font.syneExtra }]}>{stats.credited}</Text>
+              <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>
+                {statTimesCreditedKey(stats.credited)}
               </Text>
             </View>
           </View>
 
-          <Text style={[styles.sectionLabel, { color: colors.text3, fontFamily: font.syne }]}>appearance</Text>
-          <View style={[styles.themeRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <MyPostsJournal posts={posts} colors={colors} />
+
+          <Text style={[styles.fieldLabel, { color: colors.text3, fontFamily: font.syne, marginTop: 6, marginBottom: 6 }]}>
+            APPEARANCE
+          </Text>
+          <View style={[styles.themeRow, { backgroundColor: colors.bg3, borderColor: colors.border2, marginBottom: 14 }]}>
             {(['system', 'light', 'dark'] as const).map((p) => (
               <Pressable
                 key={p}
@@ -283,104 +260,83 @@ export default function YouScreen() {
               </Pressable>
             ))}
           </View>
-          <Pressable
-            onPress={() => setAccountOpen(true)}
-            style={[styles.accountBtn, { borderColor: colors.border2, backgroundColor: colors.card }]}
+          <View
+            style={[
+              styles.accountSheetRow,
+              styles.accountFriendsBlock,
+              { borderColor: colors.border2, backgroundColor: colors.card },
+            ]}
           >
-            <Text style={{ color: colors.text2, fontFamily: font.syne, fontWeight: '700' }}>account</Text>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={{ color: colors.text1, fontFamily: font.syne, fontWeight: '700' }}>friends only</Text>
+              <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 11, marginTop: 5, lineHeight: 15 }}>
+                When on, only people who follow you can see your posts and your profile.
+              </Text>
+            </View>
+            <Switch
+              value={Boolean(profile?.friends_only)}
+              onValueChange={(v) => {
+                void (async () => {
+                  const { error } = await setFriendsOnly(v);
+                  if (error) Alert.alert('Could not update', error);
+                })();
+              }}
+              trackColor={{
+                false: colors.bg3,
+                true: scheme === 'dark' ? 'rgba(212,255,63,0.35)' : 'rgba(90,122,0,0.35)',
+              }}
+              thumbColor={profile?.friends_only ? colors.accent : colors.text3}
+              ios_backgroundColor={colors.border2}
+            />
+          </View>
+          <Pressable
+            onPress={async () => {
+              await signOut();
+              router.replace('/');
+            }}
+            style={[styles.accountSheetRow, { borderColor: colors.border2, backgroundColor: colors.card }]}
+          >
+            <Text style={{ color: colors.text1, fontFamily: font.syne }}>sign out</Text>
+          </Pressable>
+          <Pressable
+            disabled={deleteBusy || busy}
+            onPress={() => {
+              Alert.alert(
+                'Delete account',
+                'This permanently deletes your Sidekix account and data you added in the app. This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete account',
+                    style: 'destructive',
+                    onPress: () => {
+                      void (async () => {
+                        setErr(null);
+                        setDeleteBusy(true);
+                        const { error } = await deleteAccount();
+                        setDeleteBusy(false);
+                        if (error) {
+                          Alert.alert('Could not delete account', error);
+                          return;
+                        }
+                        router.replace('/');
+                      })();
+                    },
+                  },
+                ],
+              );
+            }}
+            style={[
+              styles.accountSheetRow,
+              styles.accountSheetDanger,
+              { borderColor: 'rgba(255,80,80,0.35)', backgroundColor: colors.card },
+            ]}
+          >
+            <Text style={{ color: '#f66', fontFamily: font.syne, fontWeight: '700' }}>delete account</Text>
           </Pressable>
         </View>
         </View>
       </ScrollView>
-
-      <Modal visible={accountOpen} animationType="slide" transparent onRequestClose={() => setAccountOpen(false)}>
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Pressable style={styles.sheetBackdropDim} onPress={() => setAccountOpen(false)} />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={0}
-            style={{ width: '100%' }}
-          >
-            <View
-              style={[styles.sheet, { backgroundColor: colors.bg2, paddingBottom: Math.max(insets.bottom, 20) }]}
-              onStartShouldSetResponder={() => true}
-            >
-              <Text style={[styles.sheetTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>account</Text>
-              <View style={[styles.accountSheetRow, styles.accountFriendsBlock, { borderColor: colors.border2 }]}>
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={{ color: colors.text1, fontFamily: font.syne, fontWeight: '700' }}>friends only</Text>
-                  <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 11, marginTop: 5, lineHeight: 15 }}>
-                    When on, only people who follow you can see your posts and your profile.
-                  </Text>
-                </View>
-                <Switch
-                  value={Boolean(profile?.friends_only)}
-                  onValueChange={(v) => {
-                    void (async () => {
-                      const { error } = await setFriendsOnly(v);
-                      if (error) Alert.alert('Could not update', error);
-                    })();
-                  }}
-                  trackColor={{
-                    false: colors.bg3,
-                    true: scheme === 'dark' ? 'rgba(212,255,63,0.35)' : 'rgba(90,122,0,0.35)',
-                  }}
-                  thumbColor={profile?.friends_only ? colors.accent : colors.text3}
-                  ios_backgroundColor={colors.border2}
-                />
-              </View>
-              <Pressable
-                onPress={async () => {
-                  setAccountOpen(false);
-                  await signOut();
-                  router.replace('/');
-                }}
-                style={[styles.accountSheetRow, { borderColor: colors.border2 }]}
-              >
-                <Text style={{ color: colors.text1, fontFamily: font.syne }}>sign out</Text>
-              </Pressable>
-              <Pressable
-                disabled={deleteBusy || busy}
-                onPress={() => {
-                  Alert.alert(
-                    'Delete account',
-                    'This permanently deletes your Sidekix account and data you added in the app. This cannot be undone.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Delete account',
-                        style: 'destructive',
-                        onPress: () => {
-                          void (async () => {
-                            setAccountOpen(false);
-                            setErr(null);
-                            setDeleteBusy(true);
-                            const { error } = await deleteAccount();
-                            setDeleteBusy(false);
-                            if (error) {
-                              Alert.alert('Could not delete account', error);
-                              return;
-                            }
-                            router.replace('/');
-                          })();
-                        },
-                      },
-                    ],
-                  );
-                }}
-                style={[styles.accountSheetRow, styles.accountSheetDanger, { borderColor: 'rgba(255,80,80,0.35)' }]}
-              >
-                <Text style={{ color: '#f66', fontFamily: font.syne, fontWeight: '700' }}>delete account</Text>
-              </Pressable>
-              <Pressable onPress={() => setAccountOpen(false)}>
-                <Text style={{ textAlign: 'center', color: colors.text2, fontFamily: font.syne, paddingVertical: 12 }}>
-                  close
-                </Text>
-              </Pressable>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
 
       <Modal visible={sheet} animationType="slide" transparent onRequestClose={() => setSheet(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -465,43 +421,15 @@ const styles = StyleSheet.create({
   },
   profName: { fontSize: 15, letterSpacing: -0.2 },
   profEdit: { fontSize: 10, letterSpacing: 0.6, marginTop: 3, fontWeight: '700' },
-  statsRow: { borderWidth: 1, borderRadius: 12, flexDirection: 'row', marginBottom: 10, overflow: 'hidden' },
+  statsRow: { borderWidth: 1, borderRadius: 12, flexDirection: 'row', marginBottom: 14, overflow: 'hidden' },
   statCell: { flex: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4 },
   statValue: { fontSize: 17, marginBottom: 3, fontWeight: '800' },
   statKey: { fontSize: 9, letterSpacing: 0.7, textTransform: 'uppercase' },
-  streakRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 14,
-    gap: 10,
-  },
-  streakEmoji: { fontSize: 22 },
-  streakHint: { flex: 1, fontSize: 13, lineHeight: 18, textTransform: 'lowercase' },
-  streakPill: {
-    borderRadius: 999,
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    minWidth: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  streakPillText: { fontSize: 16, fontWeight: '800' },
   sectionLabel: { fontSize: 10, letterSpacing: 1, marginBottom: 8 },
   themeRow: { flexDirection: 'row', gap: 8, borderRadius: 12, borderWidth: 1, padding: 10, marginBottom: 14 },
   themeChip: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
   themeChipText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
-  accountBtn: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    marginBottom: 22,
-  },
+  fieldLabel: { fontSize: 10, letterSpacing: 1, marginBottom: 6 },
   accountSheetRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -531,7 +459,6 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
   },
   sheetTitle: { fontSize: 17, fontWeight: '800', marginBottom: 16 },
-  fieldLabel: { fontSize: 10, letterSpacing: 1, marginBottom: 6 },
   sheetInput: { borderWidth: 1.5, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 14, marginBottom: 10, fontSize: 14 },
   sheetAvatarBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 14 },
   sheetPrimary: { borderRadius: 50, paddingVertical: 14, alignItems: 'center', marginBottom: 8 },

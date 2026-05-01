@@ -3,6 +3,8 @@ export type ChallengeRow = {
   day: string;
   title: string;
   emphasis: string;
+  categories?: string[] | null;
+  subtitle?: string | null;
   display_number: number;
   created_at: string;
 };
@@ -35,6 +37,7 @@ export type SidequestRow = {
   id: string;
   creator_id: string;
   title: string;
+  subtitle?: string | null;
   categories: string[];
   is_anonymous: boolean;
   approval_status: 'pending' | 'approved' | 'rejected';

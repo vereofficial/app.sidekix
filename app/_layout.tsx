@@ -124,6 +124,7 @@ function NavigationShell() {
           <Stack.Screen name="sidequest/[id]" />
           <Stack.Screen name="challenge/[id]" />
           <Stack.Screen name="p/[id]" />
+          <Stack.Screen name="saved-quests" />
         </Stack>
       </NavThemeProvider>
       <Modal visible={rateVisible} transparent animationType="fade">

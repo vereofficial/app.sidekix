@@ -25,9 +25,9 @@ import { usePostedToday } from '../src/hooks/usePostedToday';
 import { useTodayChallenge } from '../src/hooks/useTodayChallenge';
 import { hapticHeavy, hapticSuccess } from '../src/lib/haptics';
 import { tryGetSupabase } from '../src/lib/supabase';
+import { uploadPostMediaFromUri } from '../src/lib/uploadPostMedia';
 import { MAX_POST_CAPTION_CHARS } from '../src/constants/postText';
 import { prepareVideoForUpload } from '../src/lib/prepareVideoForUpload';
-import { readLocalUriAsArrayBuffer } from '../src/lib/readLocalMediaForUpload';
 import { TextPostPresetSwatch } from '../src/components/TextPostPresetSwatch';
 import { TEXT_POST_PRESETS, clampTextPostStyle } from '../src/lib/textPostPresets';
 import { font, getColors } from '../src/theme';
@@ -74,6 +74,14 @@ export default function UploadScreen() {
       setTextStyle(0);
     }
   };
+
+  useEffect(() => {
+    if (!busy || uploadPhase !== 'reading') return;
+    const id = setInterval(() => {
+      setUploadProgress((p) => (p < 0.36 ? Math.min(0.36, p + 0.045) : p));
+    }, 320);
+    return () => clearInterval(id);
+  }, [busy, uploadPhase]);
 
   useEffect(() => {
     if (!busy || uploadPhase !== 'uploading') return;
@@ -202,25 +210,32 @@ export default function UploadScreen() {
           readUri = prepared.uri;
           videoCleanup = prepared.cleanup;
         }
-        let body: ArrayBuffer;
         try {
-          body = await readLocalUriAsArrayBuffer(readUri);
+          const contentTypeFromMime =
+            localMime && localMime.length > 0 ? localMime : null;
+          const effectiveContentType =
+            isVid && readUri !== uri
+              ? ext === 'mov'
+                ? 'video/quicktime'
+                : 'video/mp4'
+              : (contentTypeFromMime ??
+                (isVid ? (ext === 'mov' ? 'video/quicktime' : 'video/mp4') : 'image/jpeg'));
+          setUploadPhase('uploading');
+          const { pathForDb } = await uploadPostMediaFromUri({
+            supabase: sb,
+            userId: user.id,
+            objectKey: path,
+            fileUri: readUri,
+            contentType: effectiveContentType,
+            onProgress: (f) => setUploadProgress((prev) => Math.max(prev, f)),
+          });
+          setUploadProgress(1);
+          setUploadPhase('saving');
+          if (isVid) baseRow.video_path = pathForDb;
+          else baseRow.image_path = pathForDb;
         } finally {
           await videoCleanup?.();
         }
-        setUploadPhase('uploading');
-        const contentType =
-          (localMime && localMime.length > 0 ? localMime : null) ??
-          (isVid ? (ext === 'mov' ? 'video/quicktime' : 'video/mp4') : 'image/jpeg');
-        const { error: upErr } = await sb.storage.from('post-media').upload(path, body, {
-          contentType,
-          upsert: true,
-        });
-        if (upErr) throw upErr;
-        setUploadProgress(1);
-        setUploadPhase('saving');
-        if (isVid) baseRow.video_path = path;
-        else baseRow.image_path = path;
       }
 
       setUploadPhase('saving');
@@ -274,7 +289,7 @@ export default function UploadScreen() {
             one post per sidequest. Catch reactions on the feed until the next drop (Mon or Fri).
           </Text>
           <Pressable
-            onPress={() => router.replace('/(tabs)/home')}
+            onPress={() => router.replace('/(tabs)/feed')}
             style={({ pressed }) => [
               styles.doneBtn,
               { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1 },
@@ -393,30 +408,67 @@ export default function UploadScreen() {
           </View>
         ) : (
           <>
-            <Pressable
-              onPress={onPreviewPress}
-              style={[styles.preview, { borderColor: colors.border2, backgroundColor: colors.card }]}
-            >
-              {localUri ? (
-                mode === 'video' ? (
-                  <Text style={[styles.previewTitle, { color: colors.text1, fontFamily: font.syne }]}>video selected ✓</Text>
+            <View style={styles.previewWrap}>
+              <Pressable
+                onPress={onPreviewPress}
+                disabled={busy}
+                style={[styles.preview, { borderColor: colors.border2, backgroundColor: colors.card }]}
+              >
+                {localUri ? (
+                  mode === 'video' ? (
+                    <Text style={[styles.previewTitle, { color: colors.text1, fontFamily: font.syne }]}>video selected ✓</Text>
+                  ) : (
+                    <Image source={{ uri: localUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  )
                 ) : (
-                  <Image source={{ uri: localUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                )
-              ) : (
-                <>
-                  <Text style={{ fontSize: 32 }}>{mode === 'video' ? '🎬' : '📷'}</Text>
-                  <Text style={[styles.previewTitle, { color: colors.text1, fontFamily: font.syne }]}>
-                    {mode === 'camera' ? 'take a photo' : mode === 'video' ? 'pick a video (max 10s)' : 'choose a photo'}
+                  <>
+                    <Text style={{ fontSize: 32 }}>{mode === 'video' ? '🎬' : '📷'}</Text>
+                    <Text style={[styles.previewTitle, { color: colors.text1, fontFamily: font.syne }]}>
+                      {mode === 'camera' ? 'take a photo' : mode === 'video' ? 'pick a video (max 10s)' : 'choose a photo'}
+                    </Text>
+                    <Text style={[styles.previewSub, { color: colors.text3, fontFamily: font.dm }]}>
+                      {mode === 'camera' ? 'tap to open camera' : 'tap to open library'}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+              {busy ? (
+                <View
+                  style={[
+                    styles.previewBusyOverlay,
+                    { backgroundColor: scheme === 'dark' ? 'rgba(8,10,12,0.82)' : 'rgba(255,255,255,0.92)' },
+                  ]}
+                  pointerEvents="auto"
+                >
+                  <ActivityIndicator size="large" color={colors.accent} />
+                  <Text
+                    style={{
+                      marginTop: 14,
+                      fontFamily: font.syne,
+                      color: colors.text1,
+                      fontSize: 14,
+                      fontWeight: '700',
+                      textAlign: 'center',
+                      paddingHorizontal: 12,
+                    }}
+                  >
+                    {uploadPhase === 'reading'
+                      ? 'Preparing media…'
+                      : uploadPhase === 'uploading'
+                        ? 'Uploading…'
+                        : uploadPhase === 'saving'
+                          ? 'Saving your post…'
+                          : 'Working…'}
                   </Text>
-                  <Text style={[styles.previewSub, { color: colors.text3, fontFamily: font.dm }]}>
-                    {mode === 'camera' ? 'tap to open camera' : 'tap to open library'}
-                  </Text>
-                </>
-              )}
-            </Pressable>
+                </View>
+              ) : null}
+            </View>
             {mode === 'video' ? (
-              <Pressable onPress={() => pick(true, 'video')} style={{ marginHorizontal: 18, marginTop: 8 }}>
+              <Pressable
+                onPress={() => pick(true, 'video')}
+                disabled={busy}
+                style={{ marginHorizontal: 18, marginTop: 8, opacity: busy ? 0.45 : 1 }}
+              >
                 <Text style={{ color: colors.accent, fontFamily: font.syne, fontSize: 12, fontWeight: '700' }}>
                   or record with camera →
                 </Text>
@@ -566,9 +618,20 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 5, paddingHorizontal: 18, paddingTop: 14 },
   tab: { flex: 1, borderWidth: 1.5, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
   tabLabel: { fontSize: 8, letterSpacing: 0.6, textTransform: 'uppercase', fontWeight: '700' },
-  preview: {
+  previewWrap: {
     marginHorizontal: 18,
     marginTop: 14,
+    position: 'relative',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  previewBusyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 4,
+  },
+  preview: {
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderRadius: 16,

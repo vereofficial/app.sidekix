@@ -47,18 +47,19 @@ export const lightColors: ThemeColors = {
   /** Primary accent — olive green (light mode original) */
   accent: '#5A7A00',
   accentMuted: 'rgba(90,122,0,0.12)',
-  bg: '#F2F1EC',
-  bg2: '#ECEAE3',
-  bg3: '#E5E3DC',
-  card: '#FFFFFF',
-  border: '#E0DDD4',
-  border2: '#D0CEC5',
+  /** Warm paper shell (matches earlier v3-style light treatment). Cards stay slightly cleaner. */
+  bg: '#f5f0e8',
+  bg2: '#efe9df',
+  bg3: '#ebe4d8',
+  card: '#fffcf7',
+  border: '#e2d9cc',
+  border2: '#d8cec2',
   text1: '#1A1A1A',
   text2: '#666666',
   text3: '#999999',
-  navBg: '#FFFFFF',
-  navBorder: '#E8E6DF',
-  pillBg: '#E8E6DF',
+  navBg: '#f9f6f0',
+  navBorder: '#e2d9cc',
+  pillBg: '#f3eee6',
   lightAccent: '#2563A8',
   lightAccentBg: 'rgba(37,99,168,0.08)',
   lightAccentBorder: 'rgba(37,99,168,0.20)',
@@ -69,6 +70,8 @@ export function getColors(scheme: ColorSchemeName): ThemeColors {
 }
 
 export const font = {
+  /** Real Syne for brand wordmark; UI “syne” labels still use DM Sans for tab density. */
+  wordmark: 'Syne_800ExtraBold',
   syne: 'DMSans_700Bold',
   syneExtra: 'DMSans_700Bold',
   syneSemi: 'DMSans_500Medium',

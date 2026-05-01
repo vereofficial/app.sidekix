@@ -1,11 +1,24 @@
+import { getR2PublicMediaBase, isR2ObjectPath } from './r2MediaConfig';
 import { tryGetSupabase } from './supabase';
 
+function r2PublicObjectUrl(trimmed: string): string | null {
+  const base = getR2PublicMediaBase();
+  if (!base) return null;
+  const key = trimmed.replace(/^r2\//, '');
+  if (!key) return null;
+  return `${base}/${key.split('/').map(encodeURIComponent).join('/')}`;
+}
+
 /**
- * Public URL for a `post-media` object (works when the bucket is public).
+ * Public URL for a `post-media` object (works when the bucket is public),
+ * or for `r2/...` keys when EXPO_PUBLIC_R2_PUBLIC_MEDIA_URL is set.
  */
 export function getPublicPostMediaUrl(path: string | null | undefined): string | null {
   const trimmed = path?.trim();
   if (!trimmed) return null;
+  if (isR2ObjectPath(trimmed)) {
+    return r2PublicObjectUrl(trimmed);
+  }
   const sb = tryGetSupabase();
   if (!sb) return null;
   return sb.storage.from('post-media').getPublicUrl(trimmed).data.publicUrl ?? null;
@@ -26,6 +39,11 @@ export function getPublicPostMediaUrl(path: string | null | undefined): string |
 export async function getReadablePostMediaUrl(path: string): Promise<string | null> {
   const trimmed = path?.trim();
   if (!trimmed) return null;
+
+  if (isR2ObjectPath(trimmed)) {
+    return r2PublicObjectUrl(trimmed);
+  }
+
   const sb = tryGetSupabase();
   if (!sb) return null;
 

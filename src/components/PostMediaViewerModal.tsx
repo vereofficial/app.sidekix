@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '../context/AppThemeContext';
 import { useReadableStorageUrl } from '../hooks/useReadableStorageUrl';
-import type { PostRow } from '../types/database';
+import type { MediaViewerPost } from '../types/viewerPost';
 import { font, getColors } from '../theme';
 
 export function PostMediaViewerModal({
@@ -14,7 +14,7 @@ export function PostMediaViewerModal({
   canDelete = false,
   onDelete,
 }: {
-  post: PostRow | null;
+  post: MediaViewerPost | null;
   visible: boolean;
   onClose: () => void;
   canDelete?: boolean;
