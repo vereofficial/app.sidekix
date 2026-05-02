@@ -108,9 +108,20 @@ export function PostMediaTile({
     const borderC = isDark ? preset.accentBorderDark : preset.accentBorderLight;
     const fg = isDark ? preset.textDark : preset.textLight;
     const glow = isDark ? preset.glowDark : preset.glowLight;
-    const washA = isDark ? 'rgba(212,255,63,0.04)' : 'rgba(90,122,0,0.04)';
-    const washB = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.2)';
+    /** Soft paper / ink wash — keeps gradients from feeling flat */
+    const washA = isDark ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.35)';
+    const washB = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.02)';
+    /** Edge vignette for readability */
+    const vignette = isDark
+      ? ['rgba(0,0,0,0.45)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.25)'] as const
+      : ['rgba(0,0,0,0.06)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.08)'] as const;
     const metrics = textMetricsForLength(cap.length, compact);
+    const textFamily = compact ? font.dmMedium : font.serifItalic;
+    const textShadowDark = {
+      textShadowColor: 'rgba(0,0,0,0.45)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 6,
+    } as const;
 
     return (
       <LinearGradient
@@ -121,7 +132,7 @@ export function PostMediaTile({
           ...base,
           {
             padding: 0,
-            borderWidth: compact ? 1 : 1.5,
+            borderWidth: 1,
             borderColor: borderC,
           },
         ]}
@@ -141,23 +152,35 @@ export function PostMediaTile({
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
           />
+          <LinearGradient
+            colors={[vignette[0], vignette[1], vignette[2]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, { opacity: compact ? 0.55 : 0.85 }]}
+          />
+          {!compact ? (
+            <View
+              style={[styles.textAccentBar, { backgroundColor: borderC }]}
+              pointerEvents="none"
+            />
+          ) : null}
           <View
             style={[
-              styles.textCenterWrap,
-              compact ? styles.textCenterWrapCompact : null,
+              styles.textBodyWrap,
+              compact ? styles.textBodyWrapCompact : styles.textBodyWrapFull,
             ]}
           >
             <Text
               style={[
                 {
                   color: fg,
-                  fontFamily: font.syne,
-                  fontWeight: '700',
-                  textAlign: 'center',
+                  fontFamily: textFamily,
+                  textAlign: compact ? 'center' : 'left',
                   width: '100%',
                   fontSize: metrics.fontSize,
                   lineHeight: metrics.lineHeight,
-                  letterSpacing: compact ? 0 : -0.2,
+                  letterSpacing: compact ? -0.1 : 0.2,
+                  ...(isDark ? textShadowDark : {}),
                 },
               ]}
               numberOfLines={metrics.maxLines}
@@ -181,16 +204,30 @@ export function PostMediaTile({
 }
 
 const styles = StyleSheet.create({
-  textCenterWrap: {
+  textAccentBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    opacity: 0.55,
+  },
+  textBodyWrap: {
     flex: 1,
     width: '100%',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    alignItems: 'stretch',
   },
-  textCenterWrapCompact: {
+  textBodyWrapFull: {
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 9,
+    justifyContent: 'flex-start',
+  },
+  textBodyWrapCompact: {
     paddingHorizontal: 5,
     paddingVertical: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

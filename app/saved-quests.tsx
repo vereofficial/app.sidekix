@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../src/context/AuthContext';
 import { useAppTheme } from '../src/context/AppThemeContext';
 import { useSavedSidequests } from '../src/hooks/useSavedSidequests';
+import { feedCategoryChipParts } from '../src/lib/categoryDisplay';
 import { font, getColors } from '../src/theme';
 
 const TABLET_CONTENT_MAX = 560;
@@ -18,7 +19,7 @@ type MergedRow = {
   path: string;
 };
 
-/** Saved sidequests + classic challenges (stack screen — not part of tab bar). */
+/** Saved sidequests and challenge bookmarks (stack screen — not part of tab bar). */
 export default function SavedQuestsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -77,7 +78,7 @@ export default function SavedQuestsScreen() {
           <View style={styles.head}>
             <Text style={[styles.title, { color: colors.text1, fontFamily: font.syneExtra }]}>saved quests</Text>
             <Text style={[styles.sub, { color: colors.text2, fontFamily: font.dm }]}>
-              sidequests and classic ideas you bookmarked from Home.
+              Ideas you bookmarked from the Feed — they show on Home too.
             </Text>
           </View>
 
@@ -86,11 +87,16 @@ export default function SavedQuestsScreen() {
           ) : empty ? (
             <View style={[styles.emptyTip, { borderColor: colors.border2, backgroundColor: colors.card }]}>
               <Text style={{ color: colors.text2, fontFamily: font.dm, lineHeight: 18, textAlign: 'center' }}>
-                Tap + save on an idea card in Home and it shows up here.
+                Tap + save on an idea card in the Feed — it appears on Home and here.
               </Text>
               <Pressable onPress={() => router.replace('/(tabs)/feed')} style={{ marginTop: 10 }}>
                 <Text style={{ color: colors.accent, fontFamily: font.syne, fontWeight: '800', textAlign: 'center' }}>
-                  go to home →
+                  browse feed →
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => router.replace('/(tabs)/home')} style={{ marginTop: 8 }}>
+                <Text style={{ color: colors.lightAccent, fontFamily: font.dmBold, textAlign: 'center', fontSize: 13 }}>
+                  open Home tab →
                 </Text>
               </Pressable>
             </View>
@@ -105,16 +111,17 @@ export default function SavedQuestsScreen() {
                     { borderColor: colors.border2, backgroundColor: colors.card, opacity: pressed ? 0.93 : 1 },
                   ]}
                 >
-                  <Text style={{ color: colors.text3, fontFamily: font.syne, fontSize: 10 }}>
-                    saved for later · {row.kind === 'sidequest' ? 'sidequest' : 'classic idea'}
-                  </Text>
+                  <Text style={{ color: colors.text3, fontFamily: font.syne, fontSize: 10 }}>saved for later</Text>
                   <Text style={[styles.savedTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>{row.title}</Text>
                   <View style={styles.savedCats}>
-                    {row.categories.slice(0, 3).map((c, i) => (
-                      <View key={`${row.key}-c${i}`} style={[styles.savedCat, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}>
-                        <Text style={{ color: colors.text2, fontFamily: font.syne, fontSize: 10 }}>{c}</Text>
-                      </View>
-                    ))}
+                    {row.categories.slice(0, 3).map((c, i) => {
+                      const { title } = feedCategoryChipParts(c);
+                      return (
+                        <View key={`${row.key}-c${i}`} style={[styles.savedCat, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}>
+                          <Text style={{ color: colors.text2, fontFamily: font.syne, fontSize: 10 }}>{title}</Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 </Pressable>
               ))}

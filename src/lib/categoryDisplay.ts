@@ -1,6 +1,7 @@
 /** Map stored category tokens to friendlier chip labels (legacy DB rows use `legacy`). */
 export function displayCategoryChip(raw: string): string {
-  if (raw === 'legacy') return 'classic';
+  const k = raw.toLowerCase();
+  if (k === 'legacy' || k === 'classic') return 'earlier';
   return raw;
 }
 
@@ -20,6 +21,7 @@ export function categoryChipEmoji(raw: string): string {
     creative: '🎨',
     chaotic: '🌀',
     legacy: '🌌',
+    earlier: '🌌',
     classic: '🌌',
     explore: '🏙️',
     solo: '🧘',

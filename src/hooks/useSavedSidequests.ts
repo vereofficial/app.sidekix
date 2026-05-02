@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tryGetSupabase } from '../lib/supabase';
 import type { ChallengeRow, SidequestRow } from '../types/database';
+
+/** Postgres unique violation — happens when save is tapped twice before refresh catches up. */
+function isUniqueViolation(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false;
+  if (err.code === '23505') return true;
+  const m = (err.message ?? '').toLowerCase();
+  return m.includes('duplicate') || m.includes('unique constraint');
+}
 
 export type SavedSidequestPreview = {
   save_id: string;
@@ -19,6 +27,8 @@ export function useSavedSidequests(userId?: string | null) {
   const [savedChallenges, setSavedChallenges] = useState<SavedChallengePreview[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const togglingSq = useRef(new Set<string>());
+  const togglingCh = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
     if (!userId) {
@@ -106,24 +116,36 @@ export function useSavedSidequests(userId?: string | null) {
       if (!userId) return { ok: false as const, error: 'Sign in required.' };
       const sb = tryGetSupabase();
       if (!sb) return { ok: false as const, error: 'Supabase not configured.' };
+      if (togglingSq.current.has(sidequestId)) return { ok: true as const };
+      togglingSq.current.add(sidequestId);
 
-      if (savedIds.has(sidequestId)) {
-        const { error: delErr } = await sb
-          .from('sidequest_saves')
-          .delete()
-          .eq('user_id', userId)
-          .eq('sidequest_id', sidequestId);
-        if (delErr) return { ok: false as const, error: delErr.message };
-      } else {
-        const { error: insErr } = await sb.from('sidequest_saves').insert({
-          user_id: userId,
-          sidequest_id: sidequestId,
-        });
-        if (insErr) return { ok: false as const, error: insErr.message };
+      try {
+        if (savedIds.has(sidequestId)) {
+          const { error: delErr } = await sb
+            .from('sidequest_saves')
+            .delete()
+            .eq('user_id', userId)
+            .eq('sidequest_id', sidequestId);
+          if (delErr) return { ok: false as const, error: delErr.message };
+        } else {
+          const { error: insErr } = await sb.from('sidequest_saves').insert({
+            user_id: userId,
+            sidequest_id: sidequestId,
+          });
+          if (insErr) {
+            if (isUniqueViolation(insErr)) {
+              await refresh();
+              return { ok: true as const };
+            }
+            return { ok: false as const, error: insErr.message };
+          }
+        }
+
+        await refresh();
+        return { ok: true as const };
+      } finally {
+        togglingSq.current.delete(sidequestId);
       }
-
-      await refresh();
-      return { ok: true as const };
     },
     [refresh, savedIds, userId],
   );
@@ -133,24 +155,36 @@ export function useSavedSidequests(userId?: string | null) {
       if (!userId) return { ok: false as const, error: 'Sign in required.' };
       const sb = tryGetSupabase();
       if (!sb) return { ok: false as const, error: 'Supabase not configured.' };
+      if (togglingCh.current.has(challengeId)) return { ok: true as const };
+      togglingCh.current.add(challengeId);
 
-      if (savedChallengeIds.has(challengeId)) {
-        const { error: delErr } = await sb
-          .from('challenge_saves')
-          .delete()
-          .eq('user_id', userId)
-          .eq('challenge_id', challengeId);
-        if (delErr) return { ok: false as const, error: delErr.message };
-      } else {
-        const { error: insErr } = await sb.from('challenge_saves').insert({
-          user_id: userId,
-          challenge_id: challengeId,
-        });
-        if (insErr) return { ok: false as const, error: insErr.message };
+      try {
+        if (savedChallengeIds.has(challengeId)) {
+          const { error: delErr } = await sb
+            .from('challenge_saves')
+            .delete()
+            .eq('user_id', userId)
+            .eq('challenge_id', challengeId);
+          if (delErr) return { ok: false as const, error: delErr.message };
+        } else {
+          const { error: insErr } = await sb.from('challenge_saves').insert({
+            user_id: userId,
+            challenge_id: challengeId,
+          });
+          if (insErr) {
+            if (isUniqueViolation(insErr)) {
+              await refresh();
+              return { ok: true as const };
+            }
+            return { ok: false as const, error: insErr.message };
+          }
+        }
+
+        await refresh();
+        return { ok: true as const };
+      } finally {
+        togglingCh.current.delete(challengeId);
       }
-
-      await refresh();
-      return { ok: true as const };
     },
     [refresh, savedChallengeIds, userId],
   );

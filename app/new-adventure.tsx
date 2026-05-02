@@ -1,9 +1,13 @@
+import { Video, ResizeMode } from 'expo-av';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -48,7 +52,12 @@ export default function NewAdventureScreen() {
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [anonymous, setAnonymous] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const canPublish = useMemo(() => Boolean(selectedTarget?.id) && body.trim().length > 0, [selectedTarget?.id, body]);
+  const canPublish = useMemo(() => {
+    if (!selectedTarget?.id) return false;
+    const hasMedia = Boolean(mediaUri && mediaType);
+    const hasText = body.trim().length > 0;
+    return hasText || hasMedia;
+  }, [selectedTarget?.id, body, mediaUri, mediaType]);
   const visibleTargets = useMemo(() => {
     const q = targetSearch.trim().toLowerCase();
     return q ? targets.filter((t) => `${t.title} ${t.subtitle ?? ''}`.toLowerCase().includes(q)) : targets;
@@ -185,23 +194,29 @@ export default function NewAdventureScreen() {
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <View style={styles.head}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
-          <Text style={{ color: colors.text1, fontSize: 18 }}>←</Text>
-        </Pressable>
-        <View style={[styles.typePill, { backgroundColor: '#fff2ec' }]}>
-          <Text style={{ color: '#c2580d', fontFamily: font.dmBold, fontSize: 11 }}>⚡ ADVENTURE</Text>
+        <View style={styles.headSide}>
+          <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
+            <Text style={{ color: colors.text1, fontSize: 18 }}>←</Text>
+          </Pressable>
         </View>
-        <Pressable
-          disabled={!canPublish || publishing}
-          onPress={() => void publish()}
-          style={[styles.postBtn, { backgroundColor: '#b84d11', opacity: canPublish && !publishing ? 1 : 0.5 }]}
-        >
-          {publishing ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ color: '#fff', fontFamily: font.dmBold, fontSize: 14 }}>post</Text>
-          )}
-        </Pressable>
+        <View style={styles.headCenter}>
+          <View style={[styles.typePill, { backgroundColor: '#fff2ec' }]}>
+            <Text style={{ color: '#c2580d', fontFamily: font.dmBold, fontSize: 11 }}>⚡ ADVENTURE</Text>
+          </View>
+        </View>
+        <View style={[styles.headSide, styles.headSideEnd]}>
+          <Pressable
+            disabled={!canPublish || publishing}
+            onPress={() => void publish()}
+            style={[styles.postBtn, { backgroundColor: '#b84d11', opacity: canPublish && !publishing ? 1 : 0.5 }]}
+          >
+            {publishing ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ color: '#fff', fontFamily: font.dmBold, fontSize: 14 }}>post</Text>
+            )}
+          </Pressable>
+        </View>
       </View>
       <ScrollView contentContainerStyle={{ padding: 18, gap: 12 }}>
         <Pressable
@@ -209,32 +224,70 @@ export default function NewAdventureScreen() {
           disabled={publishing}
           onPress={() => void pickMedia()}
         >
-          <Text style={{ color: colors.text3, fontFamily: font.dmBold, fontSize: 15 }}>📸</Text>
-          <Text style={{ color: colors.text2, fontFamily: font.dm, marginTop: 6 }}>
-            {mediaUri ? 'change photo or video' : 'add photo or video (optional)'}
+          {mediaUri && mediaType === 'image' ? (
+            <Image source={{ uri: mediaUri }} style={styles.mediaPreview} contentFit="cover" />
+          ) : mediaUri && mediaType === 'video' ? (
+            <Video
+              source={{ uri: mediaUri }}
+              style={styles.mediaPreview}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay={false}
+              isMuted
+              useNativeControls={false}
+            />
+          ) : (
+            <Text style={{ color: colors.text3, fontFamily: font.dmBold, fontSize: 15 }}>📸</Text>
+          )}
+          <Text style={{ color: colors.text2, fontFamily: font.dm, marginTop: mediaUri ? 10 : 6 }}>
+            add photo or video{mediaUri ? '' : ' (optional)'}
           </Text>
-          <Text style={{ color: colors.text3, fontFamily: font.mono, marginTop: 4, fontSize: 10 }}>max 30 sec · 720p</Text>
+          {mediaUri ? (
+            <Text style={{ color: colors.text3, fontFamily: font.dm, marginTop: 4, fontSize: 12 }}>tap to replace</Text>
+          ) : (
+            <Text style={{ color: colors.text3, fontFamily: font.mono, marginTop: 4, fontSize: 10 }}>max 30 sec · 720p</Text>
+          )}
         </Pressable>
         <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4 }}>WHAT HAPPENED</Text>
         <TextInput
-          placeholder="where'd you go, what happened, was it worth it?"
+          placeholder={
+            mediaUri
+              ? "add a caption (optional) — or post with just the photo/video"
+              : "where'd you go, what happened, was it worth it?"
+          }
           placeholderTextColor={colors.text3}
           value={body}
           onChangeText={(t) => setBody(t.slice(0, MAX_TEXT_POST))}
           maxLength={MAX_TEXT_POST}
           multiline
+          textAlignVertical="top"
           style={[styles.input, { color: colors.text1, borderColor: colors.border2, backgroundColor: colors.card, fontFamily: font.serifItalic }]}
         />
         <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>{body.length} / {MAX_TEXT_POST}</Text>
         <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4 }}>DID SOMEONE'S IDEA INSPIRE THIS?</Text>
-        <Text style={{ color: colors.text2, fontFamily: font.mono, fontSize: 11 }}>choose sidequest</Text>
-        <TextInput
-          value={targetSearch}
-          onChangeText={setTargetSearch}
-          placeholder="search sidequests"
-          placeholderTextColor={colors.text3}
-          style={[styles.searchInput, { color: colors.text1, borderColor: colors.border2, backgroundColor: colors.card, fontFamily: font.dm }]}
-        />
+        <View style={styles.searchRow}>
+          <TextInput
+            value={targetSearch}
+            onChangeText={setTargetSearch}
+            placeholder="search sidequests or add new one"
+            placeholderTextColor={colors.text3}
+            style={[styles.searchInput, { color: colors.text1, borderColor: colors.border2, backgroundColor: colors.card, fontFamily: font.dm }]}
+            textAlignVertical="center"
+            {...(Platform.OS === 'android' ? { includeFontPadding: false } : {})}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Suggest a new sidequest"
+            onPress={() =>
+              router.push({
+                pathname: '/new-sidequest',
+                params: targetSearch.trim() ? { draftTitle: targetSearch.trim() } : {},
+              })
+            }
+            style={[styles.addNewBtn, { borderColor: colors.border2, backgroundColor: colors.card }]}
+          >
+            <Ionicons name="add" size={26} color={colors.accent} />
+          </Pressable>
+        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -245,7 +298,13 @@ export default function NewAdventureScreen() {
           {visibleTargets.map((target) => (
             <Pressable
               key={`${target.source}-${target.id}`}
-              onPress={() => setSelectedTarget(target)}
+              onPress={() => {
+                if (selectedTarget?.id === target.id && selectedTarget?.source === target.source) {
+                  setSelectedTarget(null);
+                } else {
+                  setSelectedTarget(target);
+                }
+              }}
               style={[
                 styles.chip,
                 { width: pickRowChipWidth, flexShrink: 0 },
@@ -321,7 +380,18 @@ export default function NewAdventureScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  head: { paddingHorizontal: 18, paddingTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ddd', paddingBottom: 12 },
+  head: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#ddd',
+    paddingBottom: 12,
+  },
+  headSide: { width: 88, justifyContent: 'center' },
+  headSideEnd: { alignItems: 'flex-end' },
+  headCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 18 },
   typePill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   postBtn: { borderRadius: 12, paddingHorizontal: 18, paddingVertical: 10 },
@@ -338,9 +408,39 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     paddingVertical: 2,
   },
-  searchInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
-  input: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 18, minHeight: 120, textAlignVertical: 'top', lineHeight: 30 },
-  mediaDrop: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 16, paddingVertical: 26, paddingHorizontal: 12, alignItems: 'center' },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  searchInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 48,
+    fontSize: 14,
+    paddingTop: Platform.OS === 'ios' ? 13 : 0,
+    paddingBottom: Platform.OS === 'ios' ? 13 : 0,
+    paddingVertical: Platform.OS === 'android' ? 0 : undefined,
+  },
+  addNewBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 14,
+    fontSize: 18,
+    minHeight: 120,
+    textAlignVertical: 'top',
+    lineHeight: 30,
+  },
+  mediaDrop: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 12, alignItems: 'center', overflow: 'hidden' },
+  mediaPreview: { width: '100%', height: 200, borderRadius: 12, marginBottom: 4 },
   visRow: {
     flexDirection: 'row',
     alignItems: 'center',

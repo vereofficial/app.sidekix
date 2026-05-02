@@ -82,7 +82,7 @@ export default function LegacyChallengeDetailScreen() {
           ) : null}
           <Text style={[styles.heroTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>{challenge.title}</Text>
           <Text style={{ color: colors.text2, fontFamily: font.dm, marginTop: 8 }}>
-            {challenge.subtitle?.trim() || 'A classic sidekix prompt from earlier drops.'}
+            {challenge.subtitle?.trim() || 'A prompt from an earlier drop.'}
           </Text>
           <View style={[styles.heroPeopleRow, { marginTop: 10 }]}>
             <PeopleParticipationRow
@@ -141,15 +141,12 @@ export default function LegacyChallengeDetailScreen() {
                     {p.is_anonymous ? 'anonymous' : `@${usernames[p.user_id] ?? 'user'}`}
                   </Text>
                 </View>
-                {p.image_path || p.video_path ? (
-                  <PostMediaTile post={p} style={styles.submissionGridMedia} borderRadius={8} />
-                ) : (
-                  <View style={[styles.submissionGridTextOnly, { backgroundColor: colors.bg3 }]}>
-                    <Text numberOfLines={6} style={{ color: colors.text2, fontFamily: font.dm, fontSize: 12 }}>
-                      {postCaption(p) || '…'}
-                    </Text>
-                  </View>
-                )}
+                <PostMediaTile
+                  post={p}
+                  style={styles.submissionGridMedia}
+                  borderRadius={8}
+                  compact={!(p.image_path || p.video_path)}
+                />
                 {postCaption(p) && (p.image_path || p.video_path) ? (
                   <Text numberOfLines={3} style={{ color: colors.text1, fontFamily: font.dm, marginTop: 6, fontSize: 12 }}>
                     {postCaption(p)}
@@ -214,7 +211,6 @@ const styles = StyleSheet.create({
   submissionGridCell3: { width: '31.5%' },
   submissionGridCellHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 6 },
   submissionGridMedia: { width: '100%', aspectRatio: 1, borderRadius: 8, overflow: 'hidden' },
-  submissionGridTextOnly: { width: '100%', aspectRatio: 1, borderRadius: 8, padding: 8, justifyContent: 'center' },
   card: { marginHorizontal: 18, marginTop: 12, borderWidth: 1, borderRadius: 14, padding: 10 },
   media: { width: '100%', aspectRatio: 4 / 3, borderRadius: 10, overflow: 'hidden' },
 });

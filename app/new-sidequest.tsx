@@ -1,6 +1,6 @@
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../src/context/AuthContext';
 import { useAppTheme } from '../src/context/AppThemeContext';
@@ -14,6 +14,7 @@ const CATEGORIES = ['food/drink', 'outdoor', 'social', 'trend', 'creative', 'cha
 
 export default function NewSidequestScreen() {
   const router = useRouter();
+  const { draftTitle } = useLocalSearchParams<{ draftTitle?: string }>();
   const insets = useSafeAreaInsets();
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
@@ -24,6 +25,11 @@ export default function NewSidequestScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [anonymous, setAnonymous] = useState(false);
   const canPublish = useMemo(() => title.trim().length > 2 && selected.length > 0, [title, selected.length]);
+
+  useEffect(() => {
+    const seed = typeof draftTitle === 'string' ? draftTitle.trim() : '';
+    if (seed.length > 0) setTitle(seed.slice(0, MAX_SIDEQUEST_TITLE));
+  }, [draftTitle]);
 
   const toggleCat = (c: string) =>
     setSelected((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
@@ -55,15 +61,21 @@ export default function NewSidequestScreen() {
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <View style={styles.head}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
-          <Text style={{ color: colors.text1, fontSize: 18 }}>←</Text>
-        </Pressable>
-        <View style={[styles.typePill, { backgroundColor: '#eef5ff' }]}>
-          <Text style={{ color: '#1f62c5', fontFamily: font.dmBold, fontSize: 11 }}>💡 SUGGEST AN IDEA</Text>
+        <View style={styles.headSide}>
+          <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
+            <Text style={{ color: colors.text1, fontSize: 18 }}>←</Text>
+          </Pressable>
         </View>
-        <Pressable disabled={!canPublish} onPress={() => void publish()} style={[styles.postBtn, { backgroundColor: '#b84d11', opacity: canPublish ? 1 : 0.5 }]}>
-          <Text style={{ color: '#fff', fontFamily: font.dmBold, fontSize: 14 }}>post</Text>
-        </Pressable>
+        <View style={styles.headCenter}>
+          <View style={[styles.typePill, { backgroundColor: '#eef5ff' }]}>
+            <Text style={{ color: '#1f62c5', fontFamily: font.dmBold, fontSize: 11 }}>💡 SUGGEST AN IDEA</Text>
+          </View>
+        </View>
+        <View style={[styles.headSide, styles.headSideEnd]}>
+          <Pressable disabled={!canPublish} onPress={() => void publish()} style={[styles.postBtn, { backgroundColor: '#b84d11', opacity: canPublish ? 1 : 0.5 }]}>
+            <Text style={{ color: '#fff', fontFamily: font.dmBold, fontSize: 14 }}>post</Text>
+          </Pressable>
+        </View>
       </View>
       <ScrollView contentContainerStyle={{ padding: 18, gap: 12 }}>
         <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4 }}>THE DARE</Text>
@@ -75,6 +87,7 @@ export default function NewSidequestScreen() {
           maxLength={MAX_SIDEQUEST_TITLE}
           style={[styles.input, { color: colors.text1, borderColor: colors.border2, backgroundColor: colors.card, fontFamily: font.serifItalic }]}
           multiline
+          textAlignVertical="top"
         />
         <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>{title.length} / {MAX_SIDEQUEST_TITLE}</Text>
         <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4, marginTop: 8 }}>SUBTITLE (OPTIONAL)</Text>
@@ -85,6 +98,8 @@ export default function NewSidequestScreen() {
           onChangeText={(t) => setSubtitle(t.slice(0, MAX_SIDEQUEST_SUBTITLE))}
           maxLength={MAX_SIDEQUEST_SUBTITLE}
           style={[styles.subtitleInput, { color: colors.text1, borderColor: colors.border2, backgroundColor: colors.card, fontFamily: font.dm }]}
+          textAlignVertical="center"
+          {...(Platform.OS === 'android' ? { includeFontPadding: false } : {})}
         />
         <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>{subtitle.length} / {MAX_SIDEQUEST_SUBTITLE}</Text>
         <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4 }}>VIBE</Text>
@@ -153,7 +168,7 @@ export default function NewSidequestScreen() {
         <View style={[styles.creditBox, { borderColor: colors.border2, backgroundColor: colors.card }]}>
           <Text style={{ color: '#b84d11', fontFamily: font.dmBold, marginBottom: 8 }}>💡 how credit works</Text>
           <Text style={{ color: colors.text1, fontFamily: font.dm, lineHeight: 28, fontSize: 14 }}>
-            Every time someone does your idea and links it back, you get credited on their post. Your "times done" count lives on your profile.
+            Every time someone does your idea and links it back, you get credited on their post. Your "times credited" count lives on your profile.
           </Text>
         </View>
       </ScrollView>
@@ -163,12 +178,43 @@ export default function NewSidequestScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  head: { paddingHorizontal: 18, paddingTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ddd', paddingBottom: 12 },
+  head: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#ddd',
+    paddingBottom: 12,
+  },
+  headSide: { width: 88, justifyContent: 'center' },
+  headSideEnd: { alignItems: 'flex-end' },
+  headCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 18 },
   typePill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   postBtn: { borderRadius: 12, paddingHorizontal: 18, paddingVertical: 10 },
-  input: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 18, minHeight: 140, textAlignVertical: 'top', lineHeight: 30 },
-  subtitleInput: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 15, minHeight: 48 },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 14,
+    fontSize: 18,
+    minHeight: 140,
+    textAlignVertical: 'top',
+    lineHeight: 30,
+  },
+  subtitleInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 48,
+    fontSize: 15,
+    lineHeight: 20,
+    paddingTop: Platform.OS === 'ios' ? 14 : 0,
+    paddingBottom: Platform.OS === 'ios' ? 14 : 0,
+    paddingVertical: Platform.OS === 'android' ? 0 : undefined,
+  },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     flexDirection: 'row',

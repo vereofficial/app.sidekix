@@ -21,12 +21,13 @@ function legacyAuthorForDay(day: string): 'chinaza' | 'marina' {
   return n % 2 === 0 ? 'chinaza' : 'marina';
 }
 
-export function useFlowingSidequestSubmissions(activeCategories: string[] = []) {
+export function useFlowingSidequestSubmissions(activeCategories: string[] = [], enabled = true) {
   const [rows, setRows] = useState<FlowingSubmissionRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const categoriesKey = activeCategories.join('|');
   const refresh = useCallback(async () => {
+    if (!enabled) return;
     const sb = tryGetSupabase();
     if (!sb) {
       setRows([]);
@@ -147,8 +148,8 @@ export function useFlowingSidequestSubmissions(activeCategories: string[] = []) 
       cur.push(p);
       legacyPostsByChallenge.set(p.challenge_id, cur);
     });
-    const legacyRowsRaw: FlowingSubmissionRow[] = legacyPosts
-      .map((p) => {
+    const legacyRowsRaw = legacyPosts
+      .map((p): FlowingSubmissionRow | null => {
         const c = legacyChallengeMap.get(p.challenge_id);
         if (!c) return null;
         const legacyCategories = c.categories ?? ['legacy'];
@@ -160,8 +161,8 @@ export function useFlowingSidequestSubmissions(activeCategories: string[] = []) 
           .map((lp) => (lp.is_anonymous ? 'anonymous' : usernameMap.get(lp.user_id) ?? legacyAuthorForDay(c.day)))
           .filter((name, idx, arr) => arr.indexOf(name) === idx)
           .slice(0, 3);
-        const promptAuthor = legacyAuthorForDay(c.day);
-        return {
+        const promptAuthor: string = legacyAuthorForDay(c.day);
+        const row: FlowingSubmissionRow = {
           id: p.id,
           sidequest_id: p.challenge_id,
           user_id: p.user_id,
@@ -179,8 +180,9 @@ export function useFlowingSidequestSubmissions(activeCategories: string[] = []) 
           idea_creator_username: promptAuthor,
           vote_count: 0,
         };
+        return row;
       })
-      .filter((row): row is FlowingSubmissionRow => Boolean(row));
+      .filter((row): row is FlowingSubmissionRow => row != null);
 
     const legacyPostIds = legacyRowsRaw.map((r) => r.id);
     const voteTotals = new Map<string, number>();
@@ -198,11 +200,15 @@ export function useFlowingSidequestSubmissions(activeCategories: string[] = []) 
     const combined = [...sidequestRows, ...legacyRows].sort((a, b) => b.created_at.localeCompare(a.created_at));
     setRows(combined);
     setLoading(false);
-  }, [categoriesKey]);
+  }, [categoriesKey, enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, enabled]);
 
   return { rows, loading, refresh };
 }

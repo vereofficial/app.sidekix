@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, startTransition } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -155,7 +155,10 @@ export default function FeedScreen() {
     [homeMode, activeCats],
   );
   const { rows: sidequests, loading: sidequestsLoading, refresh: refreshSidequests } = useSidequestFeed(categoryFilter, isAdmin);
-  const { rows: flowingRows, loading: flowingLoading, refresh: refreshFlowing } = useFlowingSidequestSubmissions(categoryFilter);
+  const { rows: flowingRows, loading: flowingLoading, refresh: refreshFlowing } = useFlowingSidequestSubmissions(
+    categoryFilter,
+    homeMode === 'recent',
+  );
   const { rows: legacyIdeas, loading: legacyIdeasLoading, refresh: refreshLegacyIdeas } = useLegacyChallengeIdeas(categoryFilter);
   const browseMerged = useMemo(
     () => mergeBrowseRows(sidequests, legacyIdeas),
@@ -216,8 +219,8 @@ export default function FeedScreen() {
   }, [user?.id, legacyPostIdsKey]);
 
   const activityMerged = useMemo(
-    () => mergeActivityFeed(flowingRows, sidequests, legacyIdeas, 120),
-    [flowingRows, sidequests, legacyIdeas],
+    () => (homeMode === 'recent' ? mergeActivityFeed(flowingRows, sidequests, legacyIdeas, 120) : []),
+    [homeMode, flowingRows, sidequests, legacyIdeas],
   );
 
   useEffect(() => {
@@ -301,7 +304,9 @@ export default function FeedScreen() {
   const chooseHomeMode = (next: 'feed' | 'recent') => {
     if (next === homeMode) return;
     hapticLight();
-    setHomeMode(next);
+    startTransition(() => {
+      setHomeMode(next);
+    });
     InteractionManager.runAfterInteractions(() => {
       void setHomeFeedMode(user?.id ?? null, next);
     });
@@ -447,13 +452,17 @@ export default function FeedScreen() {
   );
 
   const toggleSaveSidequestCard = async (sidequestId: string) => {
+    const wasSaved = savedIds.has(sidequestId);
     const res = await toggleSaved(sidequestId);
     if (!res.ok) Alert.alert('Save', res.error);
+    else if (!wasSaved) router.push('/(tabs)/home?section=saved');
   };
 
   const toggleSaveChallengeCard = async (challengeId: string) => {
+    const wasSaved = savedChallengeIds.has(challengeId);
     const res = await toggleSavedChallenge(challengeId);
     if (!res.ok) Alert.alert('Save', res.error);
+    else if (!wasSaved) router.push('/(tabs)/home?section=saved');
   };
 
   const onPull = async () => {
@@ -910,7 +919,7 @@ export default function FeedScreen() {
         ) : null}
 
         {homeMode === 'recent' ? (
-          flowingLoading || sidequestsLoading || legacyIdeasLoading ? (
+          flowingLoading || legacyIdeasLoading ? (
             <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
           ) : activityMerged.length === 0 ? (
             <View style={styles.sidequestListWrap}>
@@ -1143,7 +1152,9 @@ export default function FeedScreen() {
                         </Text>
                       </Pressable>
                       <Pressable
-                        onPress={() => router.push(`/sidequest/${item.sq.id}`)}
+                        onPress={() =>
+                          router.push({ pathname: '/new-adventure', params: { sidequestId: item.sq.id } })
+                        }
                         style={[styles.feedTryBtn, { backgroundColor: colors.lightAccentBg, borderColor: colors.lightAccentBorder }]}
                       >
                         <Text style={{ fontFamily: font.dmBold, fontSize: 12, color: colors.lightAccent }}>try this →</Text>
@@ -1218,7 +1229,12 @@ export default function FeedScreen() {
                         </Text>
                       </Pressable>
                       <Pressable
-                        onPress={() => router.push(`/challenge/${item.idea.challenge_id}`)}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/new-adventure',
+                            params: { challengeId: item.idea.challenge_id },
+                          })
+                        }
                         style={[styles.feedTryBtn, { backgroundColor: colors.lightAccentBg, borderColor: colors.lightAccentBorder }]}
                       >
                         <Text style={{ fontFamily: font.dmBold, fontSize: 12, color: colors.lightAccent }}>try this →</Text>
