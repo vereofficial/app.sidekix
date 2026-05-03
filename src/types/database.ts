@@ -64,3 +64,12 @@ export type SidequestSaveRow = {
   user_id: string;
   created_at: string;
 };
+
+/** 1–5 star rating of the sidequest idea after posting an adventure (one row per user per sidequest). */
+export type SidequestExperienceRatingRow = {
+  user_id: string;
+  sidequest_id: string;
+  stars: number;
+  created_at: string;
+  updated_at: string;
+};

@@ -250,18 +250,15 @@ export default function HomeScreen() {
     if (onDeck.kind === 'saved') {
       const { row } = onDeck;
       const meta = rowMeta[row.key];
-      const openDetail = () => router.push(row.path);
       const openAdventure = () => goAdventure(row);
       const doneSuffix =
         meta != null && meta.done > 1 ? ` · ${meta.done.toLocaleString()} done` : '';
   return (
         <View style={[styles.deckCard, { backgroundColor: deck.bg, borderColor: deck.border }]}>
           <Text style={[styles.deckEyebrow, { color: deck.eyebrow, fontFamily: font.mono }]}>ON DECK</Text>
-          <Pressable onPress={openDetail} accessibilityRole="button" accessibilityLabel={`Open ${row.title}`}>
-            <Text style={[styles.deckTitle, { color: deck.title, fontFamily: font.serifItalic }]} numberOfLines={5}>
-              {row.title.toLowerCase()}
-                </Text>
-              </Pressable>
+          <Text style={[styles.deckTitle, { color: deck.title, fontFamily: font.serifItalic }]} numberOfLines={5}>
+            {row.title.toLowerCase()}
+          </Text>
           <View style={styles.deckFooter}>
             <Text style={[styles.deckMeta, { color: deck.muted, fontFamily: font.dm }]} numberOfLines={2}>
               idea by {meta?.authorLabel ?? '@…'}
@@ -279,7 +276,6 @@ export default function HomeScreen() {
                     return (
         <View style={[styles.deckCard, { backgroundColor: deck.bg, borderColor: deck.border }]}>
           <Text style={[styles.deckEyebrow, { color: deck.eyebrow, fontFamily: font.mono }]}>ON DECK</Text>
-          <Text style={[styles.deckScratchHint, { color: deck.muted, fontFamily: font.dm }]}>you jotted:</Text>
           <Text style={[styles.deckTitle, { color: deck.title, fontFamily: font.serifItalic }]} numberOfLines={5}>
             “{onDeck.line.text.toLowerCase()}”
                       </Text>
@@ -308,7 +304,7 @@ export default function HomeScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 8 : 0}
+        keyboardVerticalOffset={0}
       >
         <ScrollView
           ref={scrollRef}
@@ -515,10 +511,6 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     letterSpacing: -0.2,
     marginBottom: 14,
-  },
-  deckScratchHint: {
-    fontSize: 12,
-    marginBottom: 6,
   },
   deckFooter: {
     flexDirection: 'row',

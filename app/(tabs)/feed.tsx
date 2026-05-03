@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, startTransition } from 'react';
 import {
   ActivityIndicator,
@@ -186,6 +186,12 @@ export default function FeedScreen() {
     toggleSavedChallenge,
     refresh: refreshSavedQuests,
   } = useSavedSidequests(user?.id);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshSavedQuests();
+    }, [refreshSavedQuests]),
+  );
 
   const legacyPostIdsKey = useMemo(
     () =>

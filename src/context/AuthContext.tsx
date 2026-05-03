@@ -245,10 +245,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const sb = tryGetSupabase();
     if (!sb) return { error: 'Not configured' };
     const waitForSession = async (): Promise<Session | null> => {
-      for (let i = 0; i < 8; i += 1) {
+      for (let i = 0; i < 24; i += 1) {
         const { data } = await sb.auth.getSession();
         if (data.session) return data.session;
-        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => setTimeout(r, 150));
       }
       return null;
     };
@@ -305,14 +305,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error: setErr } = await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
         if (setErr) return { error: formatAuthError(setErr.message) ?? setErr.message };
         const sess = await waitForSession();
-        if (sess) setSession(sess);
+        if (sess) {
+          setSession(sess);
+        } else {
+          const { data: snap } = await sb.auth.getSession();
+          if (snap.session) setSession(snap.session);
+        }
         return { error: null };
       }
       if (code) {
         const { error: exErr } = await sb.auth.exchangeCodeForSession(code);
         if (exErr) return { error: formatAuthError(exErr.message) ?? exErr.message };
         const sess = await waitForSession();
-        if (sess) setSession(sess);
+        if (sess) {
+          setSession(sess);
+        } else {
+          const { data: snap } = await sb.auth.getSession();
+          if (snap.session) setSession(snap.session);
+        }
         return { error: null };
       }
       const sess = await waitForSession();

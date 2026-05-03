@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { Audio, ResizeMode, Video } from 'expo-av';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -55,13 +56,7 @@ export function PostMediaViewerModal({
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
         <View style={[styles.sheet, { backgroundColor: resolvedScheme === 'dark' ? '#0a0a0a' : '#101010' }]}>
           <View style={styles.topRow}>
-            {isVideo ? (
-              <Text style={[styles.hint, { color: '#fff', fontFamily: font.syne }]}>
-                tap video to {muted ? 'unmute' : 'mute'}
-              </Text>
-            ) : (
-              <View />
-            )}
+            <View style={{ flex: 1 }} />
             <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
               <Text style={[styles.closeText, { color: '#fff', fontFamily: font.syne }]}>close</Text>
             </Pressable>
@@ -74,7 +69,7 @@ export function PostMediaViewerModal({
           <View style={styles.mediaWrap}>
             {isVideo ? (
               visible && videoMedia.displayUri ? (
-                <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setMuted((m) => !m)}>
+                <>
                   <Video
                     ref={videoRef}
                     key={`${post?.id ?? 'p'}-${videoMedia.displayUri}`}
@@ -91,7 +86,19 @@ export function PostMediaViewerModal({
                       void videoRef.current?.playAsync?.();
                     }}
                   />
-                </Pressable>
+                  <Pressable
+                    onPress={() => setMuted((m) => !m)}
+                    style={styles.muteFab}
+                    accessibilityRole="button"
+                    accessibilityLabel={muted ? 'Unmute video' : 'Mute video'}
+                  >
+                    <Ionicons
+                      name={muted ? 'volume-mute-outline' : 'volume-high-outline'}
+                      size={22}
+                      color="rgba(255,255,255,0.92)"
+                    />
+                  </Pressable>
+                </>
               ) : (
                 <View style={styles.loadingWrap}>
                   <ActivityIndicator color={colors.accent} />
@@ -139,11 +146,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 8,
   },
-  hint: {
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
   closeBtn: {
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -177,6 +179,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#000',
+    position: 'relative',
+  },
+  muteFab: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingWrap: {
     ...StyleSheet.absoluteFillObject,

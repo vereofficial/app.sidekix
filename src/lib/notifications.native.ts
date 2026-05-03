@@ -11,10 +11,10 @@ import {
   NOTIF_REACTION_TITLE,
   NOTIF_SIDEQUEST_BODY,
   NOTIF_SIDEQUEST_TITLE,
+  notifAdventureReactionMilestoneBody,
   notifFriendAcceptedBody,
   notifFriendRequestBody,
   notifLeaderboardRankBody,
-  notifReactionMilestoneBody,
   notifWeeklyPlacementBody,
   notifWeeklyWinBody,
   notifWeeklyWinTitle,
@@ -92,6 +92,70 @@ async function openLeadTab() {
   }
 }
 
+async function openSidequestDetail(sidequestId: string) {
+  try {
+    router.replace(`/sidequest/${sidequestId}`);
+  } catch {
+    /* router may not be ready */
+  }
+}
+
+async function openSubmissionDetail(postId: string) {
+  try {
+    router.replace(`/submission/${postId}`);
+  } catch {
+    /* router may not be ready */
+  }
+}
+
+async function openSavedQuests() {
+  try {
+    router.replace('/saved-quests');
+  } catch {
+    /* router may not be ready */
+  }
+}
+
+type PushData = {
+  kind?: string;
+  variant?: string;
+  sidequest_id?: string;
+  post_id?: string;
+  milestone?: number | string;
+  saved_count?: number | string;
+};
+
+/**
+ * Deep links from push `content.data`. Extend server payloads to match these `kind` values.
+ */
+export async function routeNotificationData(data: PushData | undefined): Promise<void> {
+  if (!data?.kind) return;
+  const k = data.kind;
+
+  if (k === 'sidequest_activity') {
+    if (data.sidequest_id) await openSidequestDetail(data.sidequest_id);
+    return;
+  }
+  if (k === 'sidequest_trending') {
+    if (data.sidequest_id) await openSidequestDetail(data.sidequest_id);
+    return;
+  }
+  if (k === 'idea_done_milestone') {
+    if (data.sidequest_id) await openSidequestDetail(data.sidequest_id);
+    return;
+  }
+  if (k === 'adventure_reaction_milestone' || k === 'upvote_milestone') {
+    const pid = data.post_id != null ? String(data.post_id) : '';
+    if (pid) await openSubmissionDetail(pid);
+    return;
+  }
+  if (k === 're_engagement') {
+    if (String(data.variant ?? '') === 'saved_prompt') await openSavedQuests();
+    else await openFeedTab();
+    return;
+  }
+}
+
 function isSidequestNotification(request: Notifications.NotificationRequest): boolean {
   const d = request.content.data as { kind?: string } | undefined;
   if (d?.kind === 'sidequest_drop') return true;
@@ -120,7 +184,18 @@ export function attachSidequestNotificationHandlers(): () => void {
       void openTodayForSidequestDrop();
       return;
     }
-    const d = req.content.data as { kind?: string } | undefined;
+    const d = req.content.data as PushData | undefined;
+    if (
+      d?.kind === 'sidequest_activity' ||
+      d?.kind === 'sidequest_trending' ||
+      d?.kind === 'idea_done_milestone' ||
+      d?.kind === 'adventure_reaction_milestone' ||
+      d?.kind === 'upvote_milestone' ||
+      d?.kind === 're_engagement'
+    ) {
+      void routeNotificationData(d);
+      return;
+    }
     if (d?.kind === 'friend_request' || d?.kind === 'friend_accept') {
       void openFeedTab();
       return;
@@ -152,7 +227,18 @@ export async function consumeInitialSidequestNotificationIfAny(): Promise<void> 
       await openTodayForSidequestDrop();
       return;
     }
-    const d = req.content.data as { kind?: string } | undefined;
+    const d = req.content.data as PushData | undefined;
+    if (
+      d?.kind === 'sidequest_activity' ||
+      d?.kind === 'sidequest_trending' ||
+      d?.kind === 'idea_done_milestone' ||
+      d?.kind === 'adventure_reaction_milestone' ||
+      d?.kind === 'upvote_milestone' ||
+      d?.kind === 're_engagement'
+    ) {
+      await routeNotificationData(d);
+      return;
+    }
     if (d?.kind === 'friend_request' || d?.kind === 'friend_accept') {
       await openFeedTab();
       return;
@@ -205,13 +291,19 @@ export async function scheduleSidequestDropReminder() {
   });
 }
 
-export async function notifyReactionMilestone(total: number, milestone: number) {
+export async function notifyReactionMilestone(total: number, milestone: number, postId?: string) {
   if (Platform.OS === 'web') return;
   if (total < milestone) return;
   await Notifications.scheduleNotificationAsync({
     content: {
       title: NOTIF_REACTION_TITLE,
-      body: notifReactionMilestoneBody(milestone),
+      body: notifAdventureReactionMilestoneBody(milestone),
+      data: {
+        kind: 'adventure_reaction_milestone',
+        post_id: postId,
+        milestone,
+      } as PushData,
+      ...(Platform.OS === 'android' ? { android: { channelId: ANDROID_CHANNEL } } : {}),
     },
     trigger: null,
   });

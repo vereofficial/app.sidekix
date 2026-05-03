@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +7,7 @@ import { useAppTheme } from '../src/context/AppThemeContext';
 import { font, getColors } from '../src/theme';
 
 export default function AuthScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
@@ -19,6 +21,7 @@ export default function AuthScreen() {
     const { error } = await signInWithGoogle();
     setBusy(null);
     if (error) setErr(error);
+    else router.replace('/');
   };
 
   const runApple = async () => {
@@ -27,6 +30,7 @@ export default function AuthScreen() {
     const { error } = await signInWithApple();
     setBusy(null);
     if (error) setErr(error);
+    else router.replace('/');
   };
 
   return (

@@ -1,17 +1,18 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ColorSchemeName } from 'react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { getTextPostPreset } from '../lib/textPostPresets';
 import type { ThemeColors } from '../theme';
 import { font } from '../theme';
 import { formatRelativePostTime } from '../lib/formatRelativePostTime';
 import type { SidequestPostRow } from '../types/database';
 
+/** Text-only adventure on sidequest detail — uses same “Moss” gradient preset as feed text posts. */
 export function SidequestTextSubmissionCard({
   post,
   displayName,
   colors,
   scheme,
-  communityRating,
   canRemove,
   onRemove,
 }: {
@@ -19,8 +20,6 @@ export function SidequestTextSubmissionCard({
   displayName: string;
   colors: ThemeColors;
   scheme: ColorSchemeName;
-  /** Same aggregate rating shown on the hero (no per-post rating in DB). */
-  communityRating: number;
   canRemove: boolean;
   onRemove?: () => void;
 }) {
@@ -28,10 +27,11 @@ export function SidequestTextSubmissionCard({
   const initial =
     displayName.toLowerCase() === 'anonymous' ? '?' : (displayName.charAt(0).toUpperCase() || '?');
   const when = formatRelativePostTime(post.created_at);
-  const grad =
-    scheme === 'dark'
-      ? (['#152818', '#0f1f12', '#0a140d'] as const)
-      : (['#e8f4e8', '#d8ebd8', '#c8e2c8'] as const);
+  const isDark = scheme === 'dark';
+  const preset = getTextPostPreset(0);
+  const grad = (isDark ? preset.dark : preset.light) as unknown as [string, string, string];
+  const borderC = isDark ? preset.accentBorderDark : preset.accentBorderLight;
+  const fg = isDark ? preset.textDark : preset.textLight;
 
   return (
     <View style={[styles.card, { borderColor: colors.border2, backgroundColor: colors.card }]}>
@@ -58,16 +58,14 @@ export function SidequestTextSubmissionCard({
         ) : null}
       </View>
 
-      <LinearGradient colors={grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradBox}>
-        <Text style={[styles.bodyText, { color: scheme === 'dark' ? '#e8f5e8' : '#142814' }]}>{body}</Text>
+      <LinearGradient
+        colors={grad}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.gradBox, { borderColor: borderC, borderWidth: 1 }]}
+      >
+        <Text style={[styles.bodyText, { color: fg }]}>{body}</Text>
       </LinearGradient>
-
-      <View style={styles.footer}>
-        <Text style={styles.starText}>★★★★★</Text>
-        <Text style={[styles.ratingNum, { color: colors.text1, fontFamily: font.dmBold }]}>
-          {communityRating.toFixed(1)}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -113,19 +111,5 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     fontSize: 16,
     lineHeight: 24,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-  },
-  starText: {
-    fontSize: 14,
-    color: '#e6b800',
-    letterSpacing: 1,
-  },
-  ratingNum: {
-    fontSize: 15,
   },
 });

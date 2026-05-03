@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -19,9 +20,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../src/context/AuthContext';
 import { useAppTheme } from '../src/context/AppThemeContext';
+import * as LegacyFileSystem from 'expo-file-system/legacy';
+import { ADVENTURE_MAX_MEDIA_BYTES, ADVENTURE_MAX_VIDEO_MS } from '../src/lib/adventureMediaLimits';
 import { prepareVideoForUpload } from '../src/lib/prepareVideoForUpload';
 import { uploadPostMediaFromUri } from '../src/lib/uploadPostMedia';
 import { MAX_TEXT_POST } from '../src/lib/textLimits';
+import { useSavedSidequests } from '../src/hooks/useSavedSidequests';
 import { tryGetSupabase } from '../src/lib/supabase';
 import { font, getColors } from '../src/theme';
 import type { SidequestRow } from '../src/types/database';
@@ -44,6 +48,7 @@ export default function NewAdventureScreen() {
   const scheme = resolvedScheme;
   const colors = getColors(resolvedScheme);
   const { user } = useAuth();
+  const { savedIds, savedChallengeIds, toggleSaved, toggleSavedChallenge } = useSavedSidequests(user?.id);
   const [targets, setTargets] = useState<AdventureTarget[]>([]);
   const [targetSearch, setTargetSearch] = useState('');
   const [selectedTarget, setSelectedTarget] = useState<AdventureTarget | null>(null);
@@ -52,6 +57,9 @@ export default function NewAdventureScreen() {
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [anonymous, setAnonymous] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  /** 0–1 while publishing; drives progress bar. */
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [publishLabel, setPublishLabel] = useState<string>('Posting…');
   const canPublish = useMemo(() => {
     if (!selectedTarget?.id) return false;
     const hasMedia = Boolean(mediaUri && mediaType);
@@ -100,25 +108,94 @@ export default function NewAdventureScreen() {
   }, [preselectedSidequestId, preselectedChallengeId]);
 
   const pickMedia = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Photos', 'Photo library access is needed to attach media.');
-      return;
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Photos', 'Photo library access is needed to attach media.');
+        return;
+      }
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        quality: 0.85,
+        allowsMultipleSelection: false,
+        videoMaxDuration: 30,
+        ...(Platform.OS === 'ios'
+          ? {
+              /** Same strategy as `upload.tsx`: avoid Passthrough HEVC/MOV that fail read/upload for older library clips. */
+              preferredAssetRepresentationMode:
+                ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+              videoExportPreset: ImagePicker.VideoExportPreset.H264_1920x1080,
+              videoQuality: ImagePicker.UIImagePickerControllerQualityType.High,
+            }
+          : {}),
+      });
+      if (r.canceled) return;
+      const a = r.assets[0];
+      if (!a?.uri) {
+        Alert.alert('Photos', 'Could not read that item. If it is in iCloud, open Photos and let it download, then try again.');
+        return;
+      }
+      const mime = (a.mimeType ?? '').toLowerCase();
+      const isVideo =
+        (a.type as string | undefined) === 'video' ||
+        mime.startsWith('video') ||
+        /\.(mp4|mov|webm|m4v)$/i.test(a.uri);
+
+      if (isVideo && a.duration != null && a.duration > ADVENTURE_MAX_VIDEO_MS) {
+        Alert.alert('Video too long', 'Adventure clips need to be 30 seconds or shorter. Trim in Photos or pick a shorter clip.');
+        return;
+      }
+      if (a.fileSize != null && a.fileSize > ADVENTURE_MAX_MEDIA_BYTES) {
+        Alert.alert(
+          'File too large',
+          `That file is over ${Math.round(ADVENTURE_MAX_MEDIA_BYTES / (1024 * 1024))} MB. Try a shorter video or smaller photo.`,
+        );
+        return;
+      }
+
+      let uri = a.uri;
+      if (Platform.OS === 'ios' && LegacyFileSystem.cacheDirectory) {
+        const cacheDir = LegacyFileSystem.cacheDirectory;
+        const alreadyCached = uri.includes('/Caches/');
+        if (!alreadyCached && isVideo) {
+          const dest = `${cacheDir}pick-${Date.now()}.mp4`;
+          try {
+            await LegacyFileSystem.copyAsync({ from: uri, to: dest });
+            const info = await LegacyFileSystem.getInfoAsync(dest);
+            if (info.exists && 'size' in info && info.size > 0) uri = dest;
+          } catch {
+            /* keep picker uri; prepareVideoForUpload may still normalize */
+          }
+        }
+      }
+
+      if (isVideo || a.fileSize != null) {
+        try {
+          const info = await LegacyFileSystem.getInfoAsync(uri);
+          if (info.exists && 'size' in info && info.size > ADVENTURE_MAX_MEDIA_BYTES) {
+            Alert.alert(
+              'File too large',
+              `That file is over ${Math.round(ADVENTURE_MAX_MEDIA_BYTES / (1024 * 1024))} MB after export. Try a shorter clip.`,
+            );
+            return;
+          }
+        } catch {
+          /* proceed */
+        }
+      }
+
+      setMediaUri(uri);
+      setMediaType(isVideo ? 'video' : 'image');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const isPh = /PHPhotos|Photos/i.test(msg);
+      Alert.alert(
+        'Photos',
+        isPh
+          ? "We couldn't read that photo or video. Try another one, or open the image in Photos first (iCloud) and retry."
+          : 'Could not open the media library. Please try again.',
+      );
     }
-    const r = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      quality: 0.9,
-      allowsMultipleSelection: false,
-    });
-    if (r.canceled) return;
-    const a = r.assets[0];
-    const mime = (a.mimeType ?? '').toLowerCase();
-    const isVideo =
-      (a.type as string | undefined) === 'video' ||
-      mime.startsWith('video') ||
-      /\.(mp4|mov|webm|m4v)$/i.test(a.uri);
-    setMediaUri(a.uri);
-    setMediaType(isVideo ? 'video' : 'image');
   };
 
   const publish = async () => {
@@ -131,19 +208,38 @@ export default function NewAdventureScreen() {
     if (!sb) return;
 
     setPublishing(true);
+    setUploadProgress(0);
+    setPublishLabel(mediaUri && mediaType ? 'Uploading…' : 'Posting…');
     try {
       let imagePath: string | null = null;
       let videoPath: string | null = null;
       if (mediaUri && mediaType) {
+        try {
+          const info = await LegacyFileSystem.getInfoAsync(mediaUri);
+          if (info.exists && 'size' in info && info.size > ADVENTURE_MAX_MEDIA_BYTES) {
+            Alert.alert(
+              'File too large',
+              `That file is over ${Math.round(ADVENTURE_MAX_MEDIA_BYTES / (1024 * 1024))} MB.`,
+            );
+            return;
+          }
+        } catch {
+          /* continue */
+        }
+
         const ext = mediaType === 'video' ? 'mp4' : 'jpg';
         const path = `${user.id}/sq-${Date.now()}.${ext}`;
         let readUri = mediaUri;
         let cleanup: (() => Promise<void>) | undefined;
+        setUploadProgress(0.06);
+        setPublishLabel('Preparing video…');
         if (mediaType === 'video') {
           const prepared = await prepareVideoForUpload(mediaUri);
           readUri = prepared.uri;
           cleanup = prepared.cleanup;
         }
+        setUploadProgress(0.12);
+        setPublishLabel('Uploading…');
         try {
           const effectiveContentType =
             mediaType === 'video' && readUri !== mediaUri ? 'video/mp4' : mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
@@ -153,13 +249,19 @@ export default function NewAdventureScreen() {
             objectKey: path,
             fileUri: readUri,
             contentType: effectiveContentType,
+            onProgress: (p) => setUploadProgress(0.12 + Math.min(1, Math.max(0, p)) * 0.76),
           });
           if (mediaType === 'video') videoPath = pathForDb;
           else imagePath = pathForDb;
         } finally {
           await cleanup?.();
         }
+        setUploadProgress(0.9);
+      } else {
+        setUploadProgress(0.5);
       }
+
+      setPublishLabel('Publishing…');
 
       const payload = {
         user_id: user.id,
@@ -183,42 +285,80 @@ export default function NewAdventureScreen() {
         Alert.alert('Publish failed', error.message);
         return;
       }
-      router.replace('/(tabs)/feed');
+
+      setUploadProgress(0.96);
+      if (selectedTarget.source === 'sidequest' && savedIds.has(selectedTarget.id)) {
+        await toggleSaved(selectedTarget.id);
+      } else if (selectedTarget.source === 'legacy' && savedChallengeIds.has(selectedTarget.id)) {
+        await toggleSavedChallenge(selectedTarget.id);
+      }
+
+      setUploadProgress(1);
+      if (selectedTarget.source === 'sidequest') {
+        router.replace({ pathname: '/rate-sidequest', params: { sidequestId: selectedTarget.id } });
+      } else {
+        router.replace('/(tabs)/feed');
+      }
     } catch (e) {
       Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not upload media.');
     } finally {
       setPublishing(false);
+      setUploadProgress(null);
     }
   };
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
-      <View style={styles.head}>
-        <View style={styles.headSide}>
-          <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
-            <Text style={{ color: colors.text1, fontSize: 18 }}>←</Text>
-          </Pressable>
-        </View>
-        <View style={styles.headCenter}>
-          <View style={[styles.typePill, { backgroundColor: '#fff2ec' }]}>
-            <Text style={{ color: '#c2580d', fontFamily: font.dmBold, fontSize: 11 }}>⚡ ADVENTURE</Text>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
+        <View style={styles.head}>
+          <View style={styles.headSide}>
+            <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
+              <Text style={{ color: colors.text1, fontSize: 18 }}>←</Text>
+            </Pressable>
+          </View>
+          <View style={styles.headCenter}>
+            <View style={[styles.typePill, { backgroundColor: '#fff2ec' }]}>
+              <Text style={{ color: '#c2580d', fontFamily: font.dmBold, fontSize: 11 }}>⚡ ADVENTURE</Text>
+            </View>
+          </View>
+          <View style={[styles.headSide, styles.headSideEnd]}>
+            <Pressable
+              disabled={!canPublish || publishing}
+              onPress={() => void publish()}
+              style={[styles.postBtn, { backgroundColor: '#b84d11', opacity: canPublish && !publishing ? 1 : 0.5 }]}
+            >
+              {publishing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: '#fff', fontFamily: font.dmBold, fontSize: 14 }}>post</Text>
+              )}
+            </Pressable>
           </View>
         </View>
-        <View style={[styles.headSide, styles.headSideEnd]}>
-          <Pressable
-            disabled={!canPublish || publishing}
-            onPress={() => void publish()}
-            style={[styles.postBtn, { backgroundColor: '#b84d11', opacity: canPublish && !publishing ? 1 : 0.5 }]}
-          >
-            {publishing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={{ color: '#fff', fontFamily: font.dmBold, fontSize: 14 }}>post</Text>
-            )}
-          </Pressable>
-        </View>
-      </View>
-      <ScrollView contentContainerStyle={{ padding: 18, gap: 12 }}>
+        {publishing && uploadProgress != null ? (
+          <View style={{ paddingHorizontal: 18, marginBottom: 8 }}>
+            <View style={[styles.progressTrack, { backgroundColor: colors.bg3 }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${Math.round(uploadProgress * 100)}%`,
+                    backgroundColor: colors.accent,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 11, marginTop: 6 }}>{publishLabel}</Text>
+          </View>
+        ) : null}
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 18, gap: 12, paddingBottom: insets.bottom + 140 }}
+        >
         <Pressable
           style={[styles.mediaDrop, { borderColor: colors.border2, backgroundColor: colors.card, opacity: publishing ? 0.55 : 1 }]}
           disabled={publishing}
@@ -238,6 +378,12 @@ export default function NewAdventureScreen() {
           ) : (
             <Text style={{ color: colors.text3, fontFamily: font.dmBold, fontSize: 15 }}>📸</Text>
           )}
+          {publishing && mediaUri ? (
+            <View style={styles.uploadOverlay} pointerEvents="none">
+              <ActivityIndicator size="large" color="#fff" />
+              <Text style={styles.uploadOverlayText}>{publishLabel}</Text>
+            </View>
+          ) : null}
           <Text style={{ color: colors.text2, fontFamily: font.dm, marginTop: mediaUri ? 10 : 6 }}>
             add photo or video{mediaUri ? '' : ' (optional)'}
           </Text>
@@ -249,11 +395,7 @@ export default function NewAdventureScreen() {
         </Pressable>
         <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4 }}>WHAT HAPPENED</Text>
         <TextInput
-          placeholder={
-            mediaUri
-              ? "add a caption (optional) — or post with just the photo/video"
-              : "where'd you go, what happened, was it worth it?"
-          }
+          placeholder={"where'd you go, what happened, was it worth it?"}
           placeholderTextColor={colors.text3}
           value={body}
           onChangeText={(t) => setBody(t.slice(0, MAX_TEXT_POST))}
@@ -331,14 +473,13 @@ export default function NewAdventureScreen() {
             Swipe sideways for more ideas
           </Text>
         ) : null}
-        <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4 }}>VISIBILITY</Text>
         <Pressable
           accessibilityRole="switch"
           accessibilityState={{ checked: anonymous }}
-          accessibilityLabel="Journal only"
+          accessibilityLabel="Post as anonymous"
           onPress={() => setAnonymous((x) => !x)}
           style={({ pressed }) => [
-            styles.visRow,
+            styles.anonRow,
             {
               borderColor: colors.border2,
               backgroundColor: colors.card,
@@ -346,13 +487,13 @@ export default function NewAdventureScreen() {
             },
           ]}
         >
-          <Text style={{ fontSize: 20 }}>🗂</Text>
+          <Text style={{ fontSize: 20 }}>🕶️</Text>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.visTitle, { color: colors.text1, fontFamily: font.syne }]}>Journal only</Text>
-            <Text style={[styles.visSub, { color: colors.text2, fontFamily: font.dm }]}>
+            <Text style={[styles.anonTitle, { color: colors.text1, fontFamily: font.syne }]}>Post as anonymous</Text>
+            <Text style={[styles.anonSub, { color: colors.text2, fontFamily: font.dm }]}>
               {anonymous
-                ? 'This adventure stays quieter on your profile journal — same idea as hiding from the spotlight.'
-                : 'Keep adventures private in your personal sidequest journal. Great for ones just for you.'}
+                ? 'Your username stays hidden on this adventure where supported.'
+                : 'Turn on to hide your name on this post.'}
             </Text>
           </View>
           <View
@@ -373,7 +514,8 @@ export default function NewAdventureScreen() {
             />
           </View>
         </Pressable>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -439,9 +581,41 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     lineHeight: 30,
   },
-  mediaDrop: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 12, alignItems: 'center', overflow: 'hidden' },
+  mediaDrop: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    overflow: 'hidden',
+    position: 'relative',
+  },
   mediaPreview: { width: '100%', height: 200, borderRadius: 12, marginBottom: 4 },
-  visRow: {
+  progressTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  uploadOverlayText: {
+    color: '#fff',
+    fontFamily: font.dmBold,
+    fontSize: 13,
+    marginTop: 10,
+  },
+  anonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -449,10 +623,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    marginTop: 6,
+    marginTop: 14,
   },
-  visTitle: { fontSize: 13, fontWeight: '700' },
-  visSub: { fontSize: 11, marginTop: 4, lineHeight: 15 },
+  anonTitle: { fontSize: 13, fontWeight: '700' },
+  anonSub: { fontSize: 11, marginTop: 4, lineHeight: 15 },
   visSwitchTrack: {
     width: 46,
     height: 26,

@@ -319,7 +319,7 @@ export default function UploadScreen() {
     <KeyboardAvoidingView
       style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 8 : 0}
+      keyboardVerticalOffset={0}
     >
       <ScrollView
         style={styles.scroll}

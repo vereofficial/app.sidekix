@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../src/context/AuthContext';
 import { useAppTheme } from '../src/context/AppThemeContext';
@@ -60,6 +60,11 @@ export default function NewSidequestScreen() {
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
       <View style={styles.head}>
         <View style={styles.headSide}>
           <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
@@ -77,7 +82,10 @@ export default function NewSidequestScreen() {
           </Pressable>
         </View>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 18, gap: 12 }}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 18, gap: 12, paddingBottom: insets.bottom + 120 }}
+      >
         <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4 }}>THE DARE</Text>
         <TextInput
           placeholder="something specific and interesting people should actually go do..."
@@ -172,6 +180,7 @@ export default function NewSidequestScreen() {
           </Text>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

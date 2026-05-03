@@ -119,6 +119,7 @@ function NavigationShell() {
           <Stack.Screen name="post-choice" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="new-sidequest" options={{ presentation: 'card', animation: 'slide_from_right' }} />
           <Stack.Screen name="new-adventure" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+          <Stack.Screen name="rate-sidequest" options={{ presentation: 'card', animation: 'slide_from_right' }} />
           <Stack.Screen name="onboarding" options={{ presentation: 'card', animation: 'fade' }} />
           <Stack.Screen name="sharecard" />
           <Stack.Screen name="sidequest/[id]" />

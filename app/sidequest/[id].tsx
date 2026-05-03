@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PostMediaViewerModal } from '../../src/components/PostMediaViewerModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,6 +37,8 @@ function hasSubmissionMedia(p: SidequestPostRow): boolean {
   return Boolean(p.image_path?.trim() || p.video_path?.trim());
 }
 
+type RatingStats = { avg_stars: number; rating_count: number };
+
 export default function SidequestDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -51,10 +53,32 @@ export default function SidequestDetailScreen() {
   const completedCount = posts.length;
   const participantLabels = useMemo(() => participantDisplayLabelsFromPosts(posts, usernames), [posts, usernames]);
   const avatarRing = colors.card;
-  const communityRating =
+  /** Compact “buzz” score from participation count — not user-submitted ratings. */
+  const activityScore =
     completedCount === 0 ? 0 : Number(Math.min(5, 3.8 + Math.log10(completedCount + 1)).toFixed(1));
   const mediaPosts = useMemo(() => posts.filter(hasSubmissionMedia), [posts]);
   const listCols = detailPreviewColumns(mediaPosts.length);
+  const userHasPosted = Boolean(user?.id && posts.some((p) => p.user_id === user.id));
+  const [ratingStats, setRatingStats] = useState<RatingStats | null>(null);
+  const [myRatingStars, setMyRatingStars] = useState<number | null>(null);
+
+  const loadRatingStats = useCallback(async () => {
+    const sb = tryGetSupabase();
+    if (!sb || !id) return;
+    const { data, error } = await sb.rpc('get_sidequest_rating_stats', { p_sidequest_id: id });
+    if (error || data == null) {
+      setRatingStats(null);
+      return;
+    }
+    const raw = data as { avg_stars?: unknown; rating_count?: unknown };
+    const avg = Number(raw.avg_stars);
+    const n = Number(raw.rating_count);
+    if (!Number.isFinite(avg) || !Number.isFinite(n)) {
+      setRatingStats(null);
+      return;
+    }
+    setRatingStats({ avg_stars: avg, rating_count: n });
+  }, [id]);
 
   useEffect(() => {
     const load = async () => {
@@ -65,6 +89,27 @@ export default function SidequestDetailScreen() {
     };
     void load();
   }, [id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadRatingStats();
+      void (async () => {
+        const sb = tryGetSupabase();
+        if (!sb || !user?.id || !id) {
+          setMyRatingStars(null);
+          return;
+        }
+        const { data } = await sb
+          .from('sidequest_experience_ratings')
+          .select('stars')
+          .eq('user_id', user.id)
+          .eq('sidequest_id', id)
+          .maybeSingle();
+        const row = data as { stars?: number } | null;
+        setMyRatingStars(typeof row?.stars === 'number' ? row.stars : null);
+      })();
+    }, [loadRatingStats, user?.id, id]),
+  );
 
   const removeAdventure = async (postId: string) => {
     const sb = tryGetSupabase();
@@ -90,16 +135,16 @@ export default function SidequestDetailScreen() {
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
-      <View style={styles.head}>
-        <Pressable onPress={onBack} hitSlop={12}>
-          <Text style={{ color: colors.text1, fontSize: 18 }}>←</Text>
-        </Pressable>
-      </View>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: 28 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={styles.topBar}>
+          <Pressable onPress={onBack} hitSlop={12}>
+            <Text style={{ color: colors.text1, fontSize: 18 }}>←</Text>
+          </Pressable>
+        </View>
         {sidequest ? (
           <View style={[styles.hero, { borderColor: colors.border2, backgroundColor: colors.card }]}>
             {(sidequest.categories?.length ?? 0) > 0 ? (
@@ -135,21 +180,89 @@ export default function SidequestDetailScreen() {
             <View style={[styles.metricsRow, { marginTop: 8 }]}>
               <View style={styles.metricItem}>
                 <Text style={[styles.metricValue, { color: colors.text1, fontFamily: font.dmBold }]}>
-                  {communityRating.toFixed(1)}
+                  {activityScore.toFixed(1)}
                 </Text>
-                <Text style={[styles.metricLabel, { color: colors.text3, fontFamily: font.mono }]}>rating</Text>
+                <Text style={[styles.metricLabel, { color: colors.text3, fontFamily: font.mono }]}>activity</Text>
               </View>
+              {ratingStats && ratingStats.rating_count > 0 ? (
+                <View style={styles.metricItem}>
+                  <Text style={[styles.metricValue, { color: colors.text1, fontFamily: font.dmBold }]}>
+                    {ratingStats.avg_stars.toFixed(1)}
+                  </Text>
+                  <Text style={[styles.metricLabel, { color: colors.text3, fontFamily: font.mono }]}>idea rating</Text>
+                </View>
+              ) : null}
             </View>
-            <Pressable
-              onPress={() => router.push({ pathname: '/new-adventure', params: { sidequestId: id } })}
-              style={[styles.questBtn, { backgroundColor: colors.accent }]}
-            >
-              <Text
-                style={{ color: resolvedScheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.dmBold, fontSize: 16 }}
+            <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 11, marginTop: 4, lineHeight: 15 }}>
+              Activity is how often people complete this prompt.
+              {ratingStats && ratingStats.rating_count > 0
+                ? ` Idea rating is the average star score from adventurers after they post (${ratingStats.rating_count} ${
+                    ratingStats.rating_count === 1 ? 'rating' : 'ratings'
+                  }).`
+                : ' Idea ratings show up here after adventurers save a star rating when they post.'}
+            </Text>
+            {userHasPosted ? (
+              <View
+                style={[
+                  styles.questBtn,
+                  {
+                    backgroundColor: colors.bg3,
+                    borderWidth: 1,
+                    borderColor: colors.border2,
+                    marginTop: 12,
+                  },
+                ]}
               >
-                I did this quest ✓
-              </Text>
-            </Pressable>
+                <Text style={{ color: colors.text1, fontFamily: font.dmBold, fontSize: 16, textAlign: 'center' }}>
+                  You’re in ✓
+                </Text>
+                <Text
+                  style={{
+                    color: colors.text2,
+                    fontFamily: font.dm,
+                    fontSize: 12,
+                    textAlign: 'center',
+                    marginTop: 6,
+                    lineHeight: 17,
+                  }}
+                >
+                  You already posted an adventure for this sidequest.
+                </Text>
+                {myRatingStars == null ? (
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/rate-sidequest', params: { sidequestId: id } })}
+                    style={{ marginTop: 14 }}
+                  >
+                    <Text style={{ color: colors.accent, fontFamily: font.dmBold, fontSize: 14, textAlign: 'center' }}>
+                      Rate this idea ★
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Text
+                    style={{
+                      color: colors.text3,
+                      fontFamily: font.dm,
+                      fontSize: 12,
+                      textAlign: 'center',
+                      marginTop: 10,
+                    }}
+                  >
+                    You rated this idea {myRatingStars}★ — thanks.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => router.push({ pathname: '/new-adventure', params: { sidequestId: id } })}
+                style={[styles.questBtn, { backgroundColor: colors.accent }]}
+              >
+                <Text
+                  style={{ color: resolvedScheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.dmBold, fontSize: 16 }}
+                >
+                  I did this quest ✓
+                </Text>
+              </Pressable>
+            )}
           </View>
         ) : null}
         {loading ? (
@@ -168,7 +281,6 @@ export default function SidequestDetailScreen() {
                         displayName={displayName}
                         colors={colors}
                         scheme={scheme}
-                        communityRating={communityRating}
                         canRemove={Boolean(isAdmin || user?.id === p.user_id)}
                         onRemove={
                           isAdmin || user?.id === p.user_id ? () => void removeAdventure(p.id) : undefined
@@ -243,8 +355,8 @@ export default function SidequestDetailScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { flex: 1 },
-  head: { paddingHorizontal: 18, paddingTop: 12, flexDirection: 'row', alignItems: 'center' },
-  hero: { marginHorizontal: 18, marginTop: 14, borderWidth: 1, borderRadius: 14, padding: 12 },
+  topBar: { paddingHorizontal: 18, paddingTop: 4, paddingBottom: 8, flexDirection: 'row', alignItems: 'center' },
+  hero: { marginHorizontal: 18, marginTop: 0, borderWidth: 1, borderRadius: 14, padding: 12 },
   categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   categoryChip: {
     flexDirection: 'row',

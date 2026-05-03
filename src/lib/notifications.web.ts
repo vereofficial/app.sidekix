@@ -10,7 +10,7 @@ export async function consumeInitialSidequestNotificationIfAny() {}
 
 export async function scheduleSidequestDropReminder() {}
 
-export async function notifyReactionMilestone(_total: number, _milestone: number) {}
+export async function notifyReactionMilestone(_total: number, _milestone: number, _postId?: string) {}
 
 export async function registerExpoPushTokenForUser(_userId: string) {}
 

@@ -1,16 +1,25 @@
 # Supabase Edge Functions
 
-| Function            | Path                         | Purpose |
-|---------------------|------------------------------|--------|
-| `delete-account`    | `delete-account/index.ts`    | Deletes the signed-in user via Auth Admin API (`POST`/`DELETE` with `Authorization: Bearer <access_token>`). |
-| `r2-media-presign`  | `r2-media-presign/index.ts`  | Returns a presigned **PUT** URL for Cloudflare R2 (S3 API). Client uploads bytes directly to R2, then stores `r2/<key>` in Postgres. |
+| Function                      | Path                                   | Purpose |
+|-------------------------------|----------------------------------------|--------|
+| `delete-account`              | `delete-account/index.ts`              | Deletes the signed-in user via Auth Admin API (`POST`/`DELETE` with `Authorization: Bearer <access_token>`). |
+| `r2-media-presign`            | `r2-media-presign/index.ts`            | Returns a presigned **PUT** URL for Cloudflare R2 (S3 API). Client uploads bytes directly to R2, then stores `r2/<key>` in Postgres. |
+| `broadcast-expo-push`         | `broadcast-expo-push/index.ts`          | Broadcast one message to **all** registered Expo tokens (`BROADCAST_PUSH_SECRET`). |
+| `deliver-notification-outbox` | `deliver-notification-outbox/index.ts` | Drains `notification_outbox` with per-user Expo pushes; rows include `title`, `body`, and `data` for deep links (`DELIVER_OUTBOX_SECRET`). **Schedule** (e.g. every minute) with `pg_cron` or an external ping. |
+| `enqueue-scheduled-notifications` | `enqueue-scheduled-notifications/index.ts` | Enqueues trending + gentle / saved-list re-engagement (`SCHEDULED_NOTIFS_SECRET`). Run **daily or hourly** before `deliver-notification-outbox`. Requires migration `025_scheduled_reengagement_trending_peek.sql`. |
 
 Deploy (CLI):
 
 ```bash
 supabase functions deploy delete-account --project-ref YOUR_PROJECT_REF
 supabase functions deploy r2-media-presign --project-ref YOUR_PROJECT_REF
+supabase functions deploy deliver-notification-outbox --project-ref YOUR_PROJECT_REF
+supabase functions deploy enqueue-scheduled-notifications --project-ref YOUR_PROJECT_REF
 ```
+
+`enqueue-scheduled-notifications` secrets: `SCHEDULED_NOTIFS_SECRET`. Trends: ≥3 completions on a sidequest in 48h. Gentle re-engagement: no post in 14d. Saved nudge: ≥1 saved sidequest and no post in 7d. Respects `notification_preferences.social !== false`.
+
+`deliver-notification-outbox` secrets: `DELIVER_OUTBOX_SECRET` (required), plus default `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`.
 
 ### `r2-media-presign` secrets (Dashboard → Edge Functions → Secrets)
 

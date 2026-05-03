@@ -23,6 +23,8 @@
     "eas:update:dev": "npx eas update --channel development",
     "broadcast:push": "node scripts/send-broadcast.mjs",
     "supabase:functions:deploy:broadcast": "npx supabase functions deploy broadcast-expo-push",
+    "supabase:functions:deploy:outbox": "npx supabase functions deploy deliver-notification-outbox",
+    "supabase:functions:deploy:scheduled-notifs": "npx supabase functions deploy enqueue-scheduled-notifications",
     "supabase:functions:deploy:r2-presign": "npx supabase functions deploy r2-media-presign"
   },
   "dependencies": {

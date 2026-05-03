@@ -4,3 +4,11 @@
 [functions.broadcast-expo-push]
 # Custom shared secret auth (BROADCAST_PUSH_SECRET); not a Supabase JWT.
 verify_jwt = false
+
+[functions.deliver-notification-outbox]
+# Custom shared secret (DELIVER_OUTBOX_SECRET); drains notification_outbox.
+verify_jwt = false
+
+[functions.enqueue-scheduled-notifications]
+# SCHEDULED_NOTIFS_SECRET — enqueue trending + re-engagement rows.
+verify_jwt = false

@@ -20,13 +20,45 @@ function getFfmpegBridge(): FfmpegBridge | null {
 }
 
 /**
- * Android: balanced H.264/AAC pass when FFmpeg is available (iOS quality comes from picker preset in upload.tsx).
+ * Android: balanced H.264/AAC pass when FFmpeg is available.
+ * iOS: copy to app cache when the URI is not already a stable `file://` in Caches (older Photos / HEVC passthrough URIs).
+ * iOS H.264 export is set in the image picker (`videoExportPreset`); this is a second safety net for read/upload.
  */
 export async function prepareVideoForUpload(originUri: string): Promise<PrepareResult> {
   if (Platform.OS === 'web') return { uri: originUri };
 
   const cacheDir = LegacyFileSystem.cacheDirectory;
-  if (!cacheDir || Platform.OS !== 'android') {
+  if (!cacheDir) {
+    return { uri: originUri };
+  }
+
+  if (Platform.OS === 'ios') {
+    try {
+      const src = await LegacyFileSystem.getInfoAsync(originUri);
+      if (src.exists && 'size' in src && src.size > 0 && originUri.includes('/Caches/')) {
+        return { uri: originUri };
+      }
+    } catch {
+      /* try copy */
+    }
+    const out = `${cacheDir}sk-vid-${Date.now()}.mp4`;
+    try {
+      await LegacyFileSystem.copyAsync({ from: originUri, to: out });
+      const info = await LegacyFileSystem.getInfoAsync(out);
+      if (info.exists && 'size' in info && info.size > 0) {
+        return {
+          uri: out,
+          cleanup: () => LegacyFileSystem.deleteAsync(out, { idempotent: true }).catch(() => {}),
+        };
+      }
+      await LegacyFileSystem.deleteAsync(out, { idempotent: true }).catch(() => {});
+    } catch {
+      /* fall through */
+    }
+    return { uri: originUri };
+  }
+
+  if (Platform.OS !== 'android') {
     return { uri: originUri };
   }
 
