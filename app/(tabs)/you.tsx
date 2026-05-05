@@ -174,6 +174,7 @@ export default function YouScreen() {
   const cyclePref = (p: ThemePreference) => setPreference(p);
 
   const challengesLabel = stats.sidequests === 1 ? 'CHALLENGE' : 'CHALLENGES';
+  const ideasLabel = stats.ideas === 1 ? 'IDEA' : 'IDEAS';
   const timesValueColor = colors.accent;
   const impactTint =
     scheme === 'light'
@@ -254,7 +255,7 @@ export default function YouScreen() {
             <Text style={[styles.statValue, { color: colors.lightAccent, fontFamily: font.syneExtra }]}>
               {stats.ideas.toLocaleString()}
             </Text>
-            <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>IDEAS</Text>
+            <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>{ideasLabel}</Text>
           </View>
           <View style={styles.statCell}>
             <Text style={[styles.statValue, { color: timesValueColor, fontFamily: font.syneExtra }]}>
