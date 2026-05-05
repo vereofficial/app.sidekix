@@ -559,14 +559,14 @@ export default function UploadScreen() {
             ]}
           >
             <Text style={styles.winEmoji}>✓</Text>
-            <Text style={[styles.winTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>you&apos;re on the board</Text>
+            <Text style={[styles.winTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>you&apos;re live</Text>
             <Text style={[styles.winSub, { color: colors.text2, fontFamily: font.dm }]}>
-              nice — campus will see it on the feed
+              nice — it&apos;ll show on the feed
             </Text>
             <Pressable
               onPress={() => {
                 setShowWin(false);
-                router.replace('/sharecard');
+                router.replace('/(tabs)/feed');
               }}
               style={({ pressed }) => [
                 styles.winShareBtn,
@@ -578,7 +578,7 @@ export default function UploadScreen() {
               ]}
             >
               <Text style={[styles.winShareText, { color: colors.accent, fontFamily: font.syne }]}>
-                share your rank →
+                see the feed →
               </Text>
             </Pressable>
             <Pressable

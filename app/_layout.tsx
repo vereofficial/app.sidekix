@@ -34,15 +34,13 @@ import { AppThemeProvider, useAppTheme } from '../src/context/AppThemeContext';
 import { useOtaOnLaunch } from '../src/hooks/useOtaOnLaunch';
 import { useStoreRatingPrompt } from '../src/hooks/useStoreRatingPrompt';
 import {
-  attachFriendRequestRealtime,
-  attachSidequestNotificationHandlers,
-  consumeInitialSidequestNotificationIfAny,
+  attachNotificationHandlers,
+  consumeInitialNotificationIfAny,
   initNotificationHandler,
   registerExpoPushTokenForUser,
-  scheduleSidequestDropReminder,
+  scheduleLocalEngagementReminders,
 } from '../src/lib/notifications';
 import { getStoreListingReviewUrl } from '../src/lib/storeListing';
-import { WeeklyWinCelebrationHost } from '../src/components/WeeklyWinCelebrationHost';
 import { font, getColors } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -56,7 +54,7 @@ function NavigationShell() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     void initNotificationHandler();
-    const detach = attachSidequestNotificationHandlers();
+    const detach = attachNotificationHandlers();
     return () => detach();
   }, []);
 
@@ -66,21 +64,19 @@ function NavigationShell() {
     const task = InteractionManager.runAfterInteractions(() => {
       if (consumedOpenNotifRef.current) return;
       consumedOpenNotifRef.current = true;
-      void consumeInitialSidequestNotificationIfAny();
+      void consumeInitialNotificationIfAny();
     });
     return () => task.cancel();
   }, []);
 
   useEffect(() => {
-    if (Platform.OS === 'web' || !session) return;
-    void scheduleSidequestDropReminder();
-  }, [session]);
+    if (Platform.OS === 'web') return;
+    void scheduleLocalEngagementReminders(user?.id ?? null);
+  }, [user?.id]);
 
   useEffect(() => {
     if (Platform.OS === 'web' || !user?.id) return;
     void registerExpoPushTokenForUser(user.id);
-    const detach = attachFriendRequestRealtime(user.id);
-    return detach;
   }, [user?.id]);
   const nav = resolvedScheme === 'dark' ? DarkTheme : DefaultTheme;
   const merged = {
@@ -165,7 +161,6 @@ function NavigationShell() {
           </Pressable>
         </Pressable>
       </Modal>
-      <WeeklyWinCelebrationHost />
     </>
   );
 }

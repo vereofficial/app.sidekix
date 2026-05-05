@@ -1,51 +1,46 @@
 /**
- * Central place to edit local notification copy (sidequest drops + milestones).
- * Changes here ship with the next app build.
+ * Central copy for **local** notifications and parity docs for **push** payloads.
  *
- * Push `data` kinds handled for deep links — see `routeNotificationData` in `notifications.native.ts`:
- * `sidequest_activity`, `sidequest_trending`, `idea_done_milestone` (needs `sidequest_id`),
- * `adventure_reaction_milestone` (needs `post_id` — challenge `posts` row),
- * `re_engagement` (`variant`: `saved_prompt` → saved tab, else feed).
+ * ---
+ * Inventory (where strings live — update all relevant layers when copy changes)
  *
- * Scheduling / tap behavior: `src/lib/notifications.native.ts` (search `NOTIF_SIDEQUEST_*`).
- * iOS custom alert sounds require bundling a `.caf`/`.wav` in the app and setting `sound` on the notification.
+ * **A. Scheduled locally (client `notifications.native.ts`)**
+ * - `re_engagement` — several weekdays (gentle local copy) — NOTIF_ENGAGEMENT_TITLE + `notifEngagementLocalBody`
+ *
+ * **B. Local from device (client)**
+ * - `adventure_reaction_milestone` — immediate when crossing a tier — NOTIF_REACTION_TITLE + `notifAdventureReactionMilestoneBody`
+ *
+ * **C. Push via Supabase `notification_outbox` → deliver-notification-outbox**
+ * Trigger / enqueue bodies must match app deep-link handlers in `routeNotificationData`:
+ * - SQL triggers (`024_sidequest_ratings_and_notification_triggers.sql`): `sidequest_activity`, `idea_done_milestone`,
+ *   `adventure_reaction_milestone` — strings are **in the migration**, not here.
+ * - `enqueue-scheduled-notifications`: `sidequest_trending`, `re_engagement` (gentle + saved_prompt) — strings **in that Edge Function**.
+ * - Legacy resolver (`deliver-notification-outbox`): `friend_request`, `friend_accept`, `upvote_milestone` → maps to `adventure_reaction_milestone`.
+ *
+ * **D. Push payload `kind` values the client handles** (`notifications.native.ts`)
+ * `sidequest_activity`, `sidequest_trending`, `idea_done_milestone`, `adventure_reaction_milestone`,
+ * `upvote_milestone` (alias), `re_engagement`
+ * (Friend / leaderboard pushes are not routed in-app; milestone reaction push still routes.)
+ *
+ * **E. Manual broadcast** (`broadcast-expo-push`): arbitrary title/body; data `{ kind: 'broadcast' }`.
+ *
+ * Changing server/trigger copy requires a DB migration or Edge Function redeploy — OTA does not update those.
  */
-export const NOTIF_SIDEQUEST_TITLE = 'Sidekix';
-export const NOTIF_SIDEQUEST_BODY = "new sidequest just dropped. don't be last. 🔥";
+export const NOTIF_ENGAGEMENT_TITLE = 'Sidekix';
 
 export const NOTIF_REACTION_TITLE = 'Sidekix';
 
-export const NOTIF_FRIEND_TITLE = 'Sidekix';
-
-export const notifFriendRequestBody = (username: string) =>
-  `@${username} wants to be friends`;
-
-export const notifFriendAcceptedBody = (username: string) =>
-  `@${username} accepted your friend request`;
-
-export const notifLeaderboardRankBody = (place: 1 | 2 | 3) => {
-  if (place === 1) return "You're 1st on the leaderboard this week!";
-  if (place === 2) return "You're 2nd on the leaderboard this week!";
-  return "You're 3rd on the leaderboard this week!";
-};
-
-export const notifWeeklyWinTitle = 'Sidekix';
-
-export function notifWeeklyWinBody(variant: 'prize' | 'first_no_pool' | 'first_need_reactions'): string {
-  if (variant === 'prize') {
-    return 'You won last week on the leaderboard! Open the app for your recap — DM @sidekix.app to claim.';
-  }
-  if (variant === 'first_no_pool') {
-    return 'You finished #1 last week! Open the app for your week in review.';
-  }
-  return 'You topped last week’s leaderboard! Open the app for details — you may need a few more reactions to qualify for the prize.';
+/** Rotating bodies for weekly **local** engagement reminders (paired with `scheduleLocalEngagementReminders`). */
+export function notifEngagementLocalBody(slotIndex: number): string {
+  const bodies = [
+    notifReEngagementBody('gentle'),
+    'see anything worth posting today?',
+    'peek the feed — something might spark a post.',
+    'got a saved sidequest? today could be the day.',
+    'new ideas land all week. worth a quick scroll?',
+  ];
+  return bodies[((slotIndex % bodies.length) + bodies.length) % bodies.length];
 }
-
-export function notifWeeklyPlacementBody(rank: number): string {
-  return `You finished #${rank} on last week's leaderboard. Open the app for a quick recap.`;
-}
-
-// --- Push payload helpers (copy must match server / Edge Functions that schedule notifications) ---
 
 export type SidequestActivityVariant = 'named' | 'anonymous' | 'saved';
 

@@ -395,7 +395,9 @@ export default function TodayScreen() {
               {postedSubline}
             </Text>
             <Pressable
-              onPress={() => router.push('/sharecard')}
+              onPress={() => {
+                if (myPostToday?.id) router.push(`/submission/${myPostToday.id}`);
+              }}
               style={({ pressed }) => [styles.heroPostCard, { borderColor: colors.border2, opacity: pressed ? 0.95 : 1 }]}
             >
               <View style={styles.heroPostMedia}>
@@ -424,7 +426,7 @@ export default function TodayScreen() {
                   </Text>
                 </View>
                 <View style={styles.heroSharePill}>
-                  <Text style={[styles.heroSharePillText, { fontFamily: font.syne }]}>share ↗</Text>
+                  <Text style={[styles.heroSharePillText, { fontFamily: font.syne }]}>open →</Text>
                 </View>
               </View>
             </Pressable>
