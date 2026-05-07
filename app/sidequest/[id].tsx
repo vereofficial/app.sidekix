@@ -46,21 +46,18 @@ export default function SidequestDetailScreen() {
   const { resolvedScheme } = useAppTheme();
   const scheme = resolvedScheme;
   const colors = getColors(resolvedScheme);
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const [viewerPost, setViewerPost] = useState<MediaViewerPost | null>(null);
   const [sidequest, setSidequest] = useState<SidequestRow | null>(null);
-  const { posts, usernames, loading, refresh } = useSidequestPosts(id);
+  const { posts, usernames, loading } = useSidequestPosts(id);
   const completedCount = posts.length;
   const participantLabels = useMemo(() => participantDisplayLabelsFromPosts(posts, usernames), [posts, usernames]);
   const avatarRing = colors.card;
-  /** Compact “buzz” score from participation count — not user-submitted ratings. */
-  const activityScore =
-    completedCount === 0 ? 0 : Number(Math.min(5, 3.8 + Math.log10(completedCount + 1)).toFixed(1));
   const mediaPosts = useMemo(() => posts.filter(hasSubmissionMedia), [posts]);
   const listCols = detailPreviewColumns(mediaPosts.length);
   const userHasPosted = Boolean(user?.id && posts.some((p) => p.user_id === user.id));
   const [ratingStats, setRatingStats] = useState<RatingStats | null>(null);
-  const [myRatingStars, setMyRatingStars] = useState<number | null>(null);
+  const [heroTitleFontSize, setHeroTitleFontSize] = useState(40);
 
   const loadRatingStats = useCallback(async () => {
     const sb = tryGetSupabase();
@@ -90,44 +87,17 @@ export default function SidequestDetailScreen() {
     void load();
   }, [id]);
 
+  useEffect(() => {
+    setHeroTitleFontSize(40);
+  }, [sidequest?.id, sidequest?.title]);
+
   useFocusEffect(
     useCallback(() => {
       void loadRatingStats();
-      void (async () => {
-        const sb = tryGetSupabase();
-        if (!sb || !user?.id || !id) {
-          setMyRatingStars(null);
-          return;
-        }
-        const { data } = await sb
-          .from('sidequest_experience_ratings')
-          .select('stars')
-          .eq('user_id', user.id)
-          .eq('sidequest_id', id)
-          .maybeSingle();
-        const row = data as { stars?: number } | null;
-        setMyRatingStars(typeof row?.stars === 'number' ? row.stars : null);
-      })();
-    }, [loadRatingStats, user?.id, id]),
+    }, [loadRatingStats]),
   );
 
-  const removeAdventure = async (postId: string) => {
-    const sb = tryGetSupabase();
-    if (!sb) return;
-    const { error } = await sb.from('sidequest_posts').delete().eq('id', postId);
-    if (!error) await refresh();
-  };
-
-  const viewerCanDelete =
-    Boolean(viewerPost) && (isAdmin || user?.id === viewerPost?.user_id);
-
   const closeViewer = () => setViewerPost(null);
-
-  const deleteViewerPost = async () => {
-    if (!viewerPost) return;
-    await removeAdventure(viewerPost.id);
-    closeViewer();
-  };
   const onBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)/feed');
@@ -164,7 +134,25 @@ export default function SidequestDetailScreen() {
                 })}
               </View>
             ) : null}
-            <Text style={[styles.heroTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>{sidequest.title}</Text>
+            <Text
+              style={[
+                styles.heroTitle,
+                {
+                  color: colors.text1,
+                  fontFamily: font.syneExtra,
+                  fontSize: heroTitleFontSize,
+                  lineHeight: heroTitleFontSize + 6,
+                },
+              ]}
+              onTextLayout={(e) => {
+                const lineCount = e.nativeEvent.lines.length;
+                if (lineCount > 3 && heroTitleFontSize > 24) {
+                  setHeroTitleFontSize((prev) => Math.max(24, prev - 2));
+                }
+              }}
+            >
+              {sidequest.title}
+            </Text>
             <Text style={{ color: colors.text2, fontFamily: font.dm, marginTop: 8 }}>
               {sidequest.subtitle?.trim() || 'Pick a spot, do the quest, post what happened.'}
             </Text>
@@ -177,79 +165,32 @@ export default function SidequestDetailScreen() {
                 size="md"
               />
             </View>
-            <View style={[styles.metricsRow, { marginTop: 8 }]}>
-              <View style={styles.metricItem}>
-                <Text style={[styles.metricValue, { color: colors.text1, fontFamily: font.dmBold }]}>
-                  {activityScore.toFixed(1)}
-                </Text>
-                <Text style={[styles.metricLabel, { color: colors.text3, fontFamily: font.mono }]}>activity</Text>
-              </View>
-              {ratingStats && ratingStats.rating_count > 0 ? (
+            {ratingStats && ratingStats.rating_count > 0 ? (
+              <View style={[styles.metricsRow, { marginTop: 8 }]}>
                 <View style={styles.metricItem}>
                   <Text style={[styles.metricValue, { color: colors.text1, fontFamily: font.dmBold }]}>
                     {ratingStats.avg_stars.toFixed(1)}
                   </Text>
                   <Text style={[styles.metricLabel, { color: colors.text3, fontFamily: font.mono }]}>idea rating</Text>
                 </View>
-              ) : null}
-            </View>
-            <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 11, marginTop: 4, lineHeight: 15 }}>
-              Activity is how often people complete this prompt.
-              {ratingStats && ratingStats.rating_count > 0
-                ? ` Idea rating is the average star score from adventurers after they post (${ratingStats.rating_count} ${
-                    ratingStats.rating_count === 1 ? 'rating' : 'ratings'
-                  }).`
-                : ' Idea ratings show up here after adventurers save a star rating when they post.'}
-            </Text>
+              </View>
+            ) : null}
             {userHasPosted ? (
               <View
                 style={[
-                  styles.questBtn,
+                  styles.postedPill,
                   {
                     backgroundColor: colors.bg3,
-                    borderWidth: 1,
                     borderColor: colors.border2,
                     marginTop: 12,
                   },
                 ]}
+                accessibilityRole="text"
+                accessibilityLabel="Posted"
               >
-                <Text style={{ color: colors.text1, fontFamily: font.dmBold, fontSize: 16, textAlign: 'center' }}>
-                  You’re in ✓
+                <Text style={{ color: colors.text1, fontFamily: font.dmBold, fontSize: 15, textAlign: 'center' }}>
+                  Posted ✓
                 </Text>
-                <Text
-                  style={{
-                    color: colors.text2,
-                    fontFamily: font.dm,
-                    fontSize: 12,
-                    textAlign: 'center',
-                    marginTop: 6,
-                    lineHeight: 17,
-                  }}
-                >
-                  You already posted an adventure for this sidequest.
-                </Text>
-                {myRatingStars == null ? (
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/rate-sidequest', params: { sidequestId: id } })}
-                    style={{ marginTop: 14 }}
-                  >
-                    <Text style={{ color: colors.accent, fontFamily: font.dmBold, fontSize: 14, textAlign: 'center' }}>
-                      Rate this idea ★
-                    </Text>
-                  </Pressable>
-                ) : (
-                  <Text
-                    style={{
-                      color: colors.text3,
-                      fontFamily: font.dm,
-                      fontSize: 12,
-                      textAlign: 'center',
-                      marginTop: 10,
-                    }}
-                  >
-                    You rated this idea {myRatingStars}★ — thanks.
-                  </Text>
-                )}
               </View>
             ) : (
               <Pressable
@@ -281,10 +222,7 @@ export default function SidequestDetailScreen() {
                         displayName={displayName}
                         colors={colors}
                         scheme={scheme}
-                        canRemove={Boolean(isAdmin || user?.id === p.user_id)}
-                        onRemove={
-                          isAdmin || user?.id === p.user_id ? () => void removeAdventure(p.id) : undefined
-                        }
+                        canRemove={false}
                       />
                     </View>
                   );
@@ -303,11 +241,6 @@ export default function SidequestDetailScreen() {
                       <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }} numberOfLines={1}>
                         {p.is_anonymous ? 'anonymous' : `@${usernames[p.user_id] ?? 'user'}`}
                       </Text>
-                      {(isAdmin || user?.id === p.user_id) ? (
-                        <Pressable onPress={() => void removeAdventure(p.id)} hitSlop={6}>
-                          <Text style={{ color: '#f66', fontFamily: font.dmBold, fontSize: 10 }}>remove</Text>
-                        </Pressable>
-                      ) : null}
                     </View>
                     <Pressable
                       accessibilityRole="button"
@@ -341,13 +274,7 @@ export default function SidequestDetailScreen() {
           </View>
         )}
       </ScrollView>
-      <PostMediaViewerModal
-        post={viewerPost}
-        visible={viewerPost !== null}
-        onClose={closeViewer}
-        canDelete={viewerCanDelete}
-        onDelete={viewerCanDelete ? deleteViewerPost : undefined}
-      />
+      <PostMediaViewerModal post={viewerPost} visible={viewerPost !== null} onClose={closeViewer} />
     </View>
   );
 }
@@ -376,6 +303,15 @@ const styles = StyleSheet.create({
   metricItem: { alignItems: 'flex-start' },
   metricValue: { fontSize: 26, lineHeight: 28 },
   metricLabel: { fontSize: 10, letterSpacing: 0.9, textTransform: 'uppercase', marginTop: 2 },
+  postedPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   questBtn: { marginTop: 12, borderRadius: 999, paddingVertical: 14, alignItems: 'center' },
   submissionsSection: {},
   submissionFullBleed: { width: '100%' },

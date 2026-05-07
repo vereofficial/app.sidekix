@@ -119,6 +119,11 @@ export async function routeNotificationData(data: PushData | undefined): Promise
     if (data.sidequest_id) await openSidequestDetail(data.sidequest_id);
     return;
   }
+  if (k === 'sidequest_approved') {
+    if (data.sidequest_id) await openSidequestDetail(data.sidequest_id);
+    else await openFeedTab();
+    return;
+  }
   if (k === 'adventure_reaction_milestone' || k === 'upvote_milestone') {
     const pid = data.post_id != null ? String(data.post_id) : '';
     if (pid) await openSubmissionDetail(pid);
@@ -137,6 +142,7 @@ function isRoutableKind(d: PushData | undefined): boolean {
     d.kind === 'sidequest_activity' ||
     d.kind === 'sidequest_trending' ||
     d.kind === 'idea_done_milestone' ||
+    d.kind === 'sidequest_approved' ||
     d.kind === 'adventure_reaction_milestone' ||
     d.kind === 'upvote_milestone' ||
     d.kind === 're_engagement'

@@ -8,6 +8,7 @@ import { useReadableStorageUrl } from '../hooks/useReadableStorageUrl';
 import type { PostRow } from '../types/database';
 import { getTextPostPreset } from '../lib/textPostPresets';
 import { textMetricsForLength } from '../lib/textPostTextMetrics';
+import { HAS_EXPO_AV_VIDEO } from '../lib/videoSupport';
 import { font, getColors } from '../theme';
 
 export type PostLike = PostRow & { vote_count?: number };
@@ -39,7 +40,7 @@ export function PostMediaTile({
   const imageMedia = useReadableStorageUrl(hasImage ? post.image_path : null);
 
   if (hasVideo) {
-    if (loadVideo === false) {
+    if (loadVideo === false || !HAS_EXPO_AV_VIDEO) {
       return (
         <View style={base} accessibilityLabel="Video post">
           <LinearGradient

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '../context/AppThemeContext';
 import { useReadableStorageUrl } from '../hooks/useReadableStorageUrl';
+import { HAS_EXPO_AV_VIDEO } from '../lib/videoSupport';
 import type { MediaViewerPost } from '../types/viewerPost';
 import { font, getColors } from '../theme';
 
@@ -68,6 +69,13 @@ export function PostMediaViewerModal({
           ) : null}
           <View style={styles.mediaWrap}>
             {isVideo ? (
+              !HAS_EXPO_AV_VIDEO ? (
+                <View style={styles.loadingWrap}>
+                  <Text style={{ color: '#fff', fontFamily: font.dm, fontSize: 14, textAlign: 'center' }}>
+                    Video preview unavailable in this build.
+                  </Text>
+                </View>
+              ) : (
               visible && videoMedia.displayUri ? (
                 <>
                   <Video
@@ -103,6 +111,7 @@ export function PostMediaViewerModal({
                 <View style={styles.loadingWrap}>
                   <ActivityIndicator color={colors.accent} />
                 </View>
+              )
               )
             ) : imageMedia.displayUri ? (
               <Image

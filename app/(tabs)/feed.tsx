@@ -62,16 +62,6 @@ function friendDisplayFirst(u: string): string {
   return base || u;
 }
 
-function timeAgoLabel(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const min = Math.max(1, Math.floor(ms / 60000));
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  return `${day}d ago`;
-}
-
 type BrowseMergedRow =
   | { kind: 'sidequest'; key: string; sq: SidequestFeedRow }
   | { kind: 'legacy'; key: string; idea: LegacyChallengeIdeaRow };
@@ -963,10 +953,7 @@ export default function FeedScreen() {
                         </View>
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={{ color: colors.text1, fontFamily: font.dmBold, fontSize: 16 }}>
-                            {item.row.username === 'anonymous' ? 'anonymous' : item.row.username}
-                          </Text>
-                          <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>
-                            {timeAgoLabel(item.row.created_at)}
+                            {item.row.username === 'anonymous' ? 'anonymous' : `@${item.row.username}`}
                           </Text>
                         </View>
                       </View>
@@ -1104,10 +1091,7 @@ export default function FeedScreen() {
                         </View>
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={{ color: colors.text1, fontFamily: font.dmBold, fontSize: 16 }}>
-                            {item.sq.creator_username === 'anonymous' ? 'anonymous' : item.sq.creator_username}
-                          </Text>
-                          <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>
-                            {timeAgoLabel(item.sq.created_at)}
+                            {item.sq.creator_username === 'anonymous' ? 'anonymous' : `@${item.sq.creator_username}`}
                           </Text>
                         </View>
                       </View>
@@ -1183,7 +1167,6 @@ export default function FeedScreen() {
                           <Text style={{ color: colors.text1, fontFamily: font.dmBold, fontSize: 16 }}>
                             @{item.idea.creator_username}
                           </Text>
-                          <Text style={{ color: colors.text3, fontFamily: font.mono, fontSize: 10 }}>{timeAgoLabel(`${item.idea.day}T15:00:00Z`)}</Text>
                         </View>
                       </View>
                       <View

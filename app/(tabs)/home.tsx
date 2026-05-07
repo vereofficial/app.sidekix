@@ -66,7 +66,7 @@ export default function HomeScreen() {
     removeWantToTry,
     addRememberDone,
     removeRememberDone,
-  } = usePersonalScratchpad();
+  } = usePersonalScratchpad(user?.id);
 
   const [refreshing, setRefreshing] = useState(false);
   const [wishDraft, setWishDraft] = useState('');
@@ -382,7 +382,7 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            {!scratchHydrated ? (
+            {!user?.id ? null : !scratchHydrated ? (
               <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
             ) : (
               <View style={[styles.scratchShell, { borderColor: scratchBorder, backgroundColor: colors.card }]}>

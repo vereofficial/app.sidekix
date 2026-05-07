@@ -27,7 +27,6 @@ import { useMyPosts } from '../../src/hooks/useMyPosts';
 import { useReadableStorageUrl } from '../../src/hooks/useReadableStorageUrl';
 import { tryGetSupabase } from '../../src/lib/supabase';
 import { uploadPostMediaFromUri } from '../../src/lib/uploadPostMedia';
-import { statTimesCreditedKey } from '../../src/lib/formatCount';
 import { hapticLight } from '../../src/lib/haptics';
 import { font, getColors } from '../../src/theme';
 
@@ -175,7 +174,6 @@ export default function YouScreen() {
 
   const challengesLabel = stats.sidequests === 1 ? 'CHALLENGE' : 'CHALLENGES';
   const ideasLabel = stats.ideas === 1 ? 'IDEA' : 'IDEAS';
-  const timesValueColor = colors.accent;
   const impactTint =
     scheme === 'light'
       ? {
@@ -251,19 +249,11 @@ export default function YouScreen() {
             </Text>
             <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>{challengesLabel}</Text>
           </View>
-          <View style={[styles.statCell, { borderRightWidth: 1, borderRightColor: colors.border2 }]}>
+          <View style={styles.statCell}>
             <Text style={[styles.statValue, { color: colors.lightAccent, fontFamily: font.syneExtra }]}>
               {stats.ideas.toLocaleString()}
             </Text>
             <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>{ideasLabel}</Text>
-          </View>
-          <View style={styles.statCell}>
-            <Text style={[styles.statValue, { color: timesValueColor, fontFamily: font.syneExtra }]}>
-              {stats.credited.toLocaleString()}
-            </Text>
-            <Text style={[styles.statKey, { color: colors.text3, fontFamily: font.syne }]}>
-              {statTimesCreditedKey(stats.credited)}
-            </Text>
           </View>
         </View>
 
@@ -281,8 +271,11 @@ export default function YouScreen() {
               🏆 your impact
             </Text>
             <Text style={[styles.impactBody, { color: impactTint.body, fontFamily: font.dm }]}>
-              {stats.credited.toLocaleString()}{' '}
-              {stats.credited === 1 ? 'person went' : 'people went'} on real adventures because of your ideas.
+              {stats.credited === 0
+                ? 'No one has done your ideas yet — your first one is next.'
+                : `${stats.credited.toLocaleString()} ${
+                    stats.credited === 1 ? 'person went' : 'people went'
+                  } on real adventures because of your ideas.`}
             </Text>
           </View>
 

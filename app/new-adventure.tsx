@@ -27,6 +27,7 @@ import { uploadPostMediaFromUri } from '../src/lib/uploadPostMedia';
 import { MAX_TEXT_POST } from '../src/lib/textLimits';
 import { useSavedSidequests } from '../src/hooks/useSavedSidequests';
 import { tryGetSupabase } from '../src/lib/supabase';
+import { HAS_EXPO_AV_VIDEO } from '../src/lib/videoSupport';
 import { font, getColors } from '../src/theme';
 import type { SidequestRow } from '../src/types/database';
 
@@ -366,7 +367,7 @@ export default function NewAdventureScreen() {
         >
           {mediaUri && mediaType === 'image' ? (
             <Image source={{ uri: mediaUri }} style={styles.mediaPreview} contentFit="cover" />
-          ) : mediaUri && mediaType === 'video' ? (
+          ) : mediaUri && mediaType === 'video' && HAS_EXPO_AV_VIDEO ? (
             <Video
               source={{ uri: mediaUri }}
               style={styles.mediaPreview}
@@ -375,6 +376,10 @@ export default function NewAdventureScreen() {
               isMuted
               useNativeControls={false}
             />
+          ) : mediaUri && mediaType === 'video' ? (
+            <View style={[styles.mediaPreview, styles.mediaFallback]}>
+              <Text style={{ color: colors.text3, fontFamily: font.dmBold, fontSize: 22 }}>▶</Text>
+            </View>
           ) : (
             <Text style={{ color: colors.text3, fontFamily: font.dmBold, fontSize: 15 }}>📸</Text>
           )}
@@ -592,6 +597,11 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   mediaPreview: { width: '100%', height: 200, borderRadius: 12, marginBottom: 4 },
+  mediaFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(120,120,120,0.12)',
+  },
   progressTrack: {
     height: 4,
     borderRadius: 2,

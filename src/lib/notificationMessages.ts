@@ -12,13 +12,14 @@
  *
  * **C. Push via Supabase `notification_outbox` → deliver-notification-outbox**
  * Trigger / enqueue bodies must match app deep-link handlers in `routeNotificationData`:
- * - SQL triggers (`024_sidequest_ratings_and_notification_triggers.sql`): `sidequest_activity`, `idea_done_milestone`,
- *   `adventure_reaction_milestone` — strings are **in the migration**, not here.
+ * - SQL triggers (`024_sidequest_ratings_and_notification_triggers.sql`, `027_sidequest_approved_notify.sql`):
+ *   `sidequest_activity`, `idea_done_milestone`, `adventure_reaction_milestone`, `sidequest_approved`
+ *   — strings are **in the migration**, not here.
  * - `enqueue-scheduled-notifications`: `sidequest_trending`, `re_engagement` (gentle + saved_prompt) — strings **in that Edge Function**.
  * - Legacy resolver (`deliver-notification-outbox`): `friend_request`, `friend_accept`, `upvote_milestone` → maps to `adventure_reaction_milestone`.
  *
  * **D. Push payload `kind` values the client handles** (`notifications.native.ts`)
- * `sidequest_activity`, `sidequest_trending`, `idea_done_milestone`, `adventure_reaction_milestone`,
+ * `sidequest_activity`, `sidequest_trending`, `idea_done_milestone`, `sidequest_approved`, `adventure_reaction_milestone`,
  * `upvote_milestone` (alias), `re_engagement`
  * (Friend / leaderboard pushes are not routed in-app; milestone reaction push still routes.)
  *
