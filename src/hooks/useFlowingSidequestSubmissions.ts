@@ -12,7 +12,7 @@ export type FlowingSubmissionRow = SidequestPostRow & {
   source: 'sidequest' | 'legacy';
   /** Who posted this idea/challenge prompt (shown on submission cards). */
   idea_creator_username: string;
-  /** Reactions on legacy `posts`; sidequest submissions stay 0 until votes reference those ids. */
+  /** Reactions: legacy uses `votes`; sidequest uses `sidequest_post_votes`. */
   vote_count: number;
 };
 
@@ -112,7 +112,7 @@ export function useFlowingSidequestSubmissions(activeCategories: string[] = [], 
       }
     }
 
-    const sidequestRows = posts
+    const sidequestRowsRaw = posts
       .map((p) => {
         const sq = sqMap.get(p.sidequest_id);
         if (!sq || sq.approval_status !== 'approved') return null;
@@ -183,6 +183,22 @@ export function useFlowingSidequestSubmissions(activeCategories: string[] = [], 
         return row;
       })
       .filter((row): row is FlowingSubmissionRow => row != null);
+
+    const sidequestPostIds = sidequestRowsRaw.map((r) => r.id);
+    const sqVoteTotals = new Map<string, number>();
+    if (sidequestPostIds.length > 0) {
+      const { data: sqVoteRows } = await sb
+        .from('sidequest_post_votes')
+        .select('sidequest_post_id')
+        .in('sidequest_post_id', sidequestPostIds);
+      (sqVoteRows ?? []).forEach((v: { sidequest_post_id: string }) => {
+        sqVoteTotals.set(v.sidequest_post_id, (sqVoteTotals.get(v.sidequest_post_id) ?? 0) + 1);
+      });
+    }
+    const sidequestRows = sidequestRowsRaw.map((r) => ({
+      ...r,
+      vote_count: sqVoteTotals.get(r.id) ?? 0,
+    }));
 
     const legacyPostIds = legacyRowsRaw.map((r) => r.id);
     const voteTotals = new Map<string, number>();

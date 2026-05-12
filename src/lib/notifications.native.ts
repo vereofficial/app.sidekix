@@ -98,6 +98,8 @@ type PushData = {
   post_id?: string;
   milestone?: number | string;
   saved_count?: number | string;
+  /** Present when the post is a sidequest adventure (`sidequest_posts`), not legacy `posts`. */
+  submission_source?: string;
 };
 
 /**
@@ -125,6 +127,10 @@ export async function routeNotificationData(data: PushData | undefined): Promise
     return;
   }
   if (k === 'adventure_reaction_milestone' || k === 'upvote_milestone') {
+    if (String(data.submission_source ?? '') === 'sidequest' && data.sidequest_id) {
+      await openSidequestDetail(String(data.sidequest_id));
+      return;
+    }
     const pid = data.post_id != null ? String(data.post_id) : '';
     if (pid) await openSubmissionDetail(pid);
     return;

@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { challengeTag, splitChallengeTitle } from '../src/challenge';
 import { useAuth } from '../src/context/AuthContext';
 import { useAppTheme } from '../src/context/AppThemeContext';
-import { useMyPosts } from '../src/hooks/useMyPosts';
+import { useMyPosts, type JournalPost } from '../src/hooks/useMyPosts';
 import { usePostCount } from '../src/hooks/usePostCount';
 import { usePostsForChallenge } from '../src/hooks/usePostsForChallenge';
 import { usePastChallenges } from '../src/hooks/usePastChallenges';
@@ -158,14 +158,17 @@ export default function TodayScreen() {
     if (!myLoad) setDidHydrateMyPosts(true);
   }, [user?.id, myLoad]);
 
+  const isLegacyJournal = (p: JournalPost) => p.journalSource !== 'sidequest';
+
   const completedPastIds = useMemo(() => {
-    return new Set(myPosts.map((p) => p.challenge_id));
+    return new Set(myPosts.filter(isLegacyJournal).map((p) => p.challenge_id));
   }, [myPosts]);
 
   /** Newest post per challenge (feed order is created_at desc). */
   const myPostByChallengeId = useMemo(() => {
     const m = new Map<string, PostRow>();
     for (const p of myPosts) {
+      if (!isLegacyJournal(p)) continue;
       if (!m.has(p.challenge_id)) m.set(p.challenge_id, p);
     }
     return m;
@@ -173,12 +176,12 @@ export default function TodayScreen() {
 
   const postedToday = useMemo(() => {
     if (!challenge) return false;
-    return myPosts.some((p) => p.challenge_id === challenge.id);
+    return myPosts.some((p) => isLegacyJournal(p) && p.challenge_id === challenge.id);
   }, [challenge, myPosts]);
 
   const myPostToday: PostRow | null = useMemo(() => {
     if (!challenge) return null;
-    return myPosts.find((p) => p.challenge_id === challenge.id) ?? null;
+    return myPosts.find((p) => isLegacyJournal(p) && p.challenge_id === challenge.id) ?? null;
   }, [challenge, myPosts]);
 
   const firstPosterOnly = Boolean(postedToday && postCount === 1 && myPostToday);

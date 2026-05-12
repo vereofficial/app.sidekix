@@ -58,6 +58,21 @@ export type SidequestPostRow = {
   created_at: string;
 };
 
+/** One user’s 🔥 on a sidequest adventure (mirrors `votes` for legacy `posts`). */
+export type SidequestPostVoteRow = {
+  sidequest_post_id: string;
+  voter_id: string;
+  created_at: string;
+};
+
+export type PersonalScratchpadLineRow = {
+  id: string;
+  user_id: string;
+  bucket: 'wish' | 'mem';
+  line_text: string;
+  created_at: string;
+};
+
 export type SidequestSaveRow = {
   id: string;
   sidequest_id: string;

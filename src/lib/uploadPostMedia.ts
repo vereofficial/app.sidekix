@@ -23,7 +23,7 @@ async function fetchR2PresignedPut(
   const token = session?.access_token;
   if (!token) throw new Error('Not signed in.');
 
-  const { url: supabaseUrl, anonKey } = getSupabasePublicConfig();
+  const { anonKey } = getSupabasePublicConfig();
   const res = await fetch(edgeFunctionUrl('r2-media-presign'), {
     method: 'POST',
     headers: {
@@ -45,6 +45,36 @@ async function fetchR2PresignedPut(
     throw new Error('Presign response missing uploadUrl or pathForDb');
   }
   return { uploadUrl: json.uploadUrl, pathForDb: json.pathForDb };
+}
+
+function isPresignUnavailableError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  // Typical when `r2-media-presign` is not deployed: GET /functions/v1/… → Presign failed (404)
+  return /presign failed \(404\)|presign failed \(405\)/i.test(msg);
+}
+
+async function uploadViaSupabaseStorage(params: {
+  supabase: SupabaseClient;
+  objectKey: string;
+  fileUri: string;
+  contentType: string;
+  onProgress?: UploadProgressHandler;
+}): Promise<{ pathForDb: string }> {
+  const { supabase, objectKey, fileUri, contentType, onProgress } = params;
+  onProgress?.(0.05);
+  const buf = await readLocalUriAsArrayBuffer(fileUri);
+  onProgress?.(0.45);
+  const bytes = new Uint8Array(buf);
+  if (bytes.byteLength === 0) {
+    throw new Error('Media file is empty.');
+  }
+  const { error } = await supabase.storage.from('post-media').upload(objectKey, bytes, {
+    contentType,
+    upsert: true,
+  });
+  if (error) throw error;
+  onProgress?.(1);
+  return { pathForDb: objectKey };
 }
 
 async function putFileToPresignedUrl(
@@ -97,6 +127,7 @@ async function putFileToPresignedUrl(
 /**
  * Uploads media to Supabase Storage, or to Cloudflare R2 when EXPO_PUBLIC_USE_R2_MEDIA is enabled.
  * Stores DB paths as `userId/file.ext` (Supabase) or `r2/userId/file.ext` (R2).
+ * If R2 presign fails (e.g. edge function not deployed → 404), falls back to Supabase Storage so production stays usable.
  */
 export async function uploadPostMediaFromUri(params: {
   supabase: SupabaseClient;
@@ -115,25 +146,16 @@ export async function uploadPostMediaFromUri(params: {
   const useR2 = useR2MediaUpload();
 
   if (useR2) {
-    onProgress?.(0.02);
-    const { uploadUrl, pathForDb } = await fetchR2PresignedPut(supabase, objectKey, contentType);
-    onProgress?.(0.06);
-    await putFileToPresignedUrl(uploadUrl, fileUri, contentType, onProgress);
-    return { pathForDb };
+    try {
+      onProgress?.(0.02);
+      const { uploadUrl, pathForDb } = await fetchR2PresignedPut(supabase, objectKey, contentType);
+      onProgress?.(0.06);
+      await putFileToPresignedUrl(uploadUrl, fileUri, contentType, onProgress);
+      return { pathForDb };
+    } catch (e) {
+      if (!isPresignUnavailableError(e)) throw e;
+    }
   }
 
-  onProgress?.(0.05);
-  const buf = await readLocalUriAsArrayBuffer(fileUri);
-  onProgress?.(0.45);
-  const bytes = new Uint8Array(buf);
-  if (bytes.byteLength === 0) {
-    throw new Error('Media file is empty.');
-  }
-  const { error } = await supabase.storage.from('post-media').upload(objectKey, bytes, {
-    contentType,
-    upsert: true,
-  });
-  if (error) throw error;
-  onProgress?.(1);
-  return { pathForDb: objectKey };
+  return uploadViaSupabaseStorage({ supabase, objectKey, fileUri, contentType, onProgress });
 }

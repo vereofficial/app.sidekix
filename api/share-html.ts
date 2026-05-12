@@ -45,10 +45,10 @@ type ProfileRow = {
 function publicStorageUrl(supabaseUrl: string, path: string | null | undefined): string | null {
   const p = path?.trim();
   if (!p) return null;
-  if (p.startsWith('r2/')) {
+  if (/^r2\//i.test(p)) {
     const base = (process.env.EXPO_PUBLIC_R2_PUBLIC_MEDIA_URL ?? process.env.R2_PUBLIC_MEDIA_URL ?? '').replace(/\/$/, '');
     if (!base) return null;
-    const key = p.replace(/^r2\//, '');
+    const key = p.replace(/^r2\//i, '');
     const encoded = key
       .split('/')
       .filter(Boolean)

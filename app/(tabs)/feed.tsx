@@ -105,6 +105,17 @@ function postRowToViewerPost(p: PostRow): MediaViewerPost {
   };
 }
 
+/** Text-only cards use the feed “journal” layout (flat paper + category pills), not gradient presets. */
+function isTextOnlyPostLike(p: {
+  image_path?: string | null;
+  video_path?: string | null;
+  body?: string | null;
+  caption?: string | null;
+}): boolean {
+  const cap = (p.body ?? p.caption ?? '').trim();
+  return Boolean(cap) && !p.image_path?.trim() && !p.video_path?.trim();
+}
+
 export default function FeedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -128,6 +139,14 @@ export default function FeedScreen() {
   };
   const { user, isAdmin } = useAuth();
   const { challenge, loading: chLoad, refresh: refCh } = useTodayChallenge();
+  const campusFeedTextTags = useMemo(
+    () =>
+      (challenge?.categories ?? [])
+        .map((c) => String(c).trim())
+        .filter(Boolean)
+        .slice(0, 6),
+    [challenge?.categories],
+  );
   const { posts, myVoteIds, loading, error: postsErr, refresh } = usePostsForChallenge(
     challenge?.id ?? null,
     undefined,
@@ -166,8 +185,9 @@ export default function FeedScreen() {
   /** Today / campus grid fullscreen tap (challenge `posts`). */
   const [gridViewerPost, setGridViewerPost] = useState<PostRow | null>(null);
   const [legacyFeedMyVotes, setLegacyFeedMyVotes] = useState<Set<string>>(new Set());
-  /** Optimistic 🔥 totals for legacy activity posts until `refreshFlowing` finishes. */
-  const [legacyFireReactionOverride, setLegacyFireReactionOverride] = useState<Record<string, number>>({});
+  const [sidequestFeedMyVotes, setSidequestFeedMyVotes] = useState<Set<string>>(new Set());
+  /** Optimistic 🔥 totals for activity rows until `refreshFlowing` finishes (legacy + sidequest). */
+  const [flowingFireReactionOverride, setFlowingFireReactionOverride] = useState<Record<string, number>>({});
 
   const {
     savedIds,
@@ -193,10 +213,25 @@ export default function FeedScreen() {
     [flowingRows],
   );
 
+  const sidequestPostIdsKey = useMemo(
+    () =>
+      flowingRows
+        .filter((r) => r.source === 'sidequest')
+        .map((r) => r.id)
+        .sort()
+        .join('|'),
+    [flowingRows],
+  );
+
   useEffect(() => {
-    if (!user?.id || legacyPostIdsKey.length === 0) {
+    if (!user?.id) {
       setLegacyFeedMyVotes(new Set());
-      setLegacyFireReactionOverride({});
+      setSidequestFeedMyVotes(new Set());
+      setFlowingFireReactionOverride({});
+      return;
+    }
+    if (legacyPostIdsKey.length === 0) {
+      setLegacyFeedMyVotes(new Set());
       return;
     }
     let cancelled = false;
@@ -213,6 +248,33 @@ export default function FeedScreen() {
       cancelled = true;
     };
   }, [user?.id, legacyPostIdsKey]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (sidequestPostIdsKey.length === 0) {
+      setSidequestFeedMyVotes(new Set());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const sb = tryGetSupabase();
+      if (!sb) return;
+      const ids = sidequestPostIdsKey.split('|').filter(Boolean);
+      if (ids.length === 0) return;
+      const { data } = await sb
+        .from('sidequest_post_votes')
+        .select('sidequest_post_id')
+        .eq('voter_id', user.id)
+        .in('sidequest_post_id', ids);
+      if (cancelled) return;
+      setSidequestFeedMyVotes(
+        new Set((data ?? []).map((r: { sidequest_post_id: string }) => r.sidequest_post_id)),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, sidequestPostIdsKey]);
 
   const activityMerged = useMemo(
     () => (homeMode === 'recent' ? mergeActivityFeed(flowingRows, sidequests, legacyIdeas, 120) : []),
@@ -405,7 +467,7 @@ export default function FeedScreen() {
       if (!sb || !user?.id) return;
       const voteSnapshot = new Set(legacyFeedMyVotes);
 
-      setLegacyFireReactionOverride((prev) => {
+      setFlowingFireReactionOverride((prev) => {
         const base = prev[postId] ?? serverFireCount;
         const nextFire = currently ? Math.max(0, base - 1) : base + 1;
         return { ...prev, [postId]: nextFire };
@@ -429,7 +491,7 @@ export default function FeedScreen() {
       } catch {
         Alert.alert('Reaction', 'Could not update. Try again.');
         setLegacyFeedMyVotes(voteSnapshot);
-        setLegacyFireReactionOverride((prev) => {
+        setFlowingFireReactionOverride((prev) => {
           const n = { ...prev };
           delete n[postId];
           return n;
@@ -438,13 +500,67 @@ export default function FeedScreen() {
       }
 
       await refreshFlowing();
-      setLegacyFireReactionOverride((prev) => {
+      setFlowingFireReactionOverride((prev) => {
         const n = { ...prev };
         delete n[postId];
         return n;
       });
     },
     [user?.id, refreshFlowing, legacyFeedMyVotes],
+  );
+
+  const onVoteSidequestAdventure = useCallback(
+    async (sidequestPostId: string, currently: boolean, serverFireCount: number) => {
+      const sb = tryGetSupabase();
+      if (!sb || !user?.id) return;
+      const voteSnapshot = new Set(sidequestFeedMyVotes);
+
+      setFlowingFireReactionOverride((prev) => {
+        const base = prev[sidequestPostId] ?? serverFireCount;
+        const nextFire = currently ? Math.max(0, base - 1) : base + 1;
+        return { ...prev, [sidequestPostId]: nextFire };
+      });
+      setSidequestFeedMyVotes((prev) => {
+        const n = new Set(prev);
+        if (currently) n.delete(sidequestPostId);
+        else n.add(sidequestPostId);
+        return n;
+      });
+
+      hapticLight();
+      try {
+        if (currently) {
+          const { error } = await sb
+            .from('sidequest_post_votes')
+            .delete()
+            .eq('sidequest_post_id', sidequestPostId)
+            .eq('voter_id', user.id);
+          if (error) throw error;
+        } else {
+          const { error } = await sb
+            .from('sidequest_post_votes')
+            .insert({ sidequest_post_id: sidequestPostId, voter_id: user.id });
+          if (error) throw error;
+        }
+      } catch {
+        Alert.alert('Reaction', 'Could not update. Try again.');
+        setSidequestFeedMyVotes(voteSnapshot);
+        setFlowingFireReactionOverride((prev) => {
+          const n = { ...prev };
+          delete n[sidequestPostId];
+          return n;
+        });
+        return;
+      }
+
+      await refreshFlowing();
+      setFlowingFireReactionOverride((prev) => {
+        const n = { ...prev };
+        delete n[sidequestPostId];
+        return n;
+      });
+    },
+    [user?.id, refreshFlowing, sidequestFeedMyVotes],
   );
 
   const toggleSaveSidequestCard = async (sidequestId: string) => {
@@ -804,20 +920,28 @@ export default function FeedScreen() {
                             showsHorizontalScrollIndicator={false}
                             contentContainerStyle={styles.previewRow}
                           >
-                            {sq.preview_posts.map((p) => (
-                              <View key={p.id} style={styles.previewTile}>
-                                <PostMediaTile
-                                  post={{
-                                    ...p,
-                                    challenge_id: 'sidequest',
-                                    caption: p.body,
-                                    text_style: null,
-                                  }}
-                                  style={styles.previewFill}
-                                  borderRadius={8}
-                                />
-                              </View>
-                            ))}
+                            {sq.preview_posts.map((p) => {
+                              const prevTextOnly = isTextOnlyPostLike({
+                                ...p,
+                                caption: p.body,
+                              });
+                              return (
+                                <View key={p.id} style={styles.previewTile}>
+                                  <PostMediaTile
+                                    post={{
+                                      ...p,
+                                      challenge_id: 'sidequest',
+                                      caption: p.body,
+                                      text_style: null,
+                                    }}
+                                    style={styles.previewFill}
+                                    borderRadius={8}
+                                    compact={prevTextOnly}
+                                    textCardStyle={prevTextOnly ? 'feedEditorial' : 'preset'}
+                                  />
+                                </View>
+                              );
+                            })}
                           </ScrollView>
                           {sq.completion_count > 0 ? (
                             <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 12, marginTop: 6 }}>
@@ -895,11 +1019,20 @@ export default function FeedScreen() {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.previewRow}
                       >
-                        {row.idea.preview_posts.map((p) => (
-                          <View key={p.id} style={styles.previewTile}>
-                            <PostMediaTile post={p} style={styles.previewFill} borderRadius={8} />
-                          </View>
-                        ))}
+                        {row.idea.preview_posts.map((p) => {
+                          const prevTextOnly = isTextOnlyPostLike(p);
+                          return (
+                            <View key={p.id} style={styles.previewTile}>
+                              <PostMediaTile
+                                post={p}
+                                style={styles.previewFill}
+                                borderRadius={8}
+                                compact={prevTextOnly}
+                                textCardStyle={prevTextOnly ? 'feedEditorial' : 'preset'}
+                              />
+                            </View>
+                          );
+                        })}
                       </ScrollView>
                       {row.idea.completion_count > 0 ? (
                         <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 12, marginTop: 6 }}>
@@ -975,6 +1108,16 @@ export default function FeedScreen() {
                         item.row.source === 'legacy'
                           ? router.push(`/challenge/${item.row.sidequest_id}`)
                           : router.push(`/sidequest/${item.row.sidequest_id}`);
+                      const activityHasMedia = Boolean(
+                        item.row.image_path?.trim() || item.row.video_path?.trim(),
+                      );
+                      const activityTextOnly = isTextOnlyPostLike({
+                        ...item.row,
+                        caption: item.row.body,
+                      });
+                      const showCaptionOrTags =
+                        (activityHasMedia && Boolean(item.row.body?.trim())) ||
+                        (!activityTextOnly && item.row.sidequest_categories.length > 0);
                       return (
                         <>
                           <Pressable onPress={goQuest}>
@@ -996,7 +1139,11 @@ export default function FeedScreen() {
                           </Pressable>
                           <Pressable
                             onPress={() => setMediaViewerEntry(item.row)}
-                            style={[styles.flowingMedia, { borderRadius: 12, overflow: 'hidden' }]}
+                            style={
+                              activityTextOnly
+                                ? styles.flowingMediaText
+                                : [styles.flowingMedia, { borderRadius: 12, overflow: 'hidden' }]
+                            }
                           >
                             <PostMediaTile
                               post={{
@@ -1005,24 +1152,36 @@ export default function FeedScreen() {
                                 caption: item.row.body,
                                 text_style: null,
                               }}
-                              style={{ width: '100%', height: '100%' }}
+                              style={activityTextOnly ? { width: '100%' } : { width: '100%', height: '100%' }}
                               borderRadius={12}
+                              textCardStyle={activityTextOnly ? 'feedEditorial' : 'preset'}
+                              textCategoryTags={activityTextOnly ? item.row.sidequest_categories : undefined}
                             />
                           </Pressable>
-                          <Pressable onPress={goQuest}>
-                            {item.row.body ? (
-                              <Text
-                                style={{ color: colors.text2, marginTop: 10, fontFamily: font.dm, fontSize: 14, lineHeight: 20 }}
-                              >
-                                {item.row.body}
-                              </Text>
-                            ) : null}
-                            <View style={styles.sidequestTags}>
-                              {item.row.sidequest_categories.slice(0, 6).map((c) =>
-                                categoryPill(c, `${item.row.id}-${c}`),
-                              )}
-                            </View>
-                          </Pressable>
+                          {showCaptionOrTags ? (
+                            <Pressable onPress={goQuest}>
+                              {activityHasMedia && item.row.body?.trim() ? (
+                                <Text
+                                  style={{
+                                    color: colors.text2,
+                                    marginTop: 10,
+                                    fontFamily: font.dm,
+                                    fontSize: 14,
+                                    lineHeight: 20,
+                                  }}
+                                >
+                                  {item.row.body}
+                                </Text>
+                              ) : null}
+                              {!activityTextOnly ? (
+                                <View style={styles.sidequestTags}>
+                                  {item.row.sidequest_categories.slice(0, 6).map((c) =>
+                                    categoryPill(c, `${item.row.id}-${c}`),
+                                  )}
+                                </View>
+                              ) : null}
+                            </Pressable>
+                          ) : null}
                         </>
                       );
                     })()}
@@ -1066,7 +1225,40 @@ export default function FeedScreen() {
                               color: legacyFeedMyVotes.has(item.row.id) ? colors.accent : colors.text2,
                             }}
                           >
-                            🔥 {legacyFireReactionOverride[item.row.id] ?? item.row.vote_count}
+                            🔥 {flowingFireReactionOverride[item.row.id] ?? item.row.vote_count}
+                          </Text>
+                        </Pressable>
+                      ) : item.row.source === 'sidequest' ? (
+                        <Pressable
+                          onPress={() =>
+                            void onVoteSidequestAdventure(
+                              item.row.id,
+                              sidequestFeedMyVotes.has(item.row.id),
+                              item.row.vote_count,
+                            )
+                          }
+                          hitSlop={8}
+                          style={[
+                            styles.feedFooterReact,
+                            {
+                              borderWidth: 1,
+                              borderColor: sidequestFeedMyVotes.has(item.row.id)
+                                ? colors.accent
+                                : colors.border2,
+                              backgroundColor: sidequestFeedMyVotes.has(item.row.id)
+                                ? colors.accentMuted
+                                : 'transparent',
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: font.dmBold,
+                              fontSize: 12,
+                              color: sidequestFeedMyVotes.has(item.row.id) ? colors.accent : colors.text2,
+                            }}
+                          >
+                            🔥 {flowingFireReactionOverride[item.row.id] ?? item.row.vote_count}
                           </Text>
                         </Pressable>
                       ) : (
@@ -1421,11 +1613,18 @@ export default function FeedScreen() {
               <View style={[styles.grid, sparseCampusFeed && styles.gridSparse]}>
                 {visible.map((c) => {
                   const voted = myVoteIds.has(c.id);
+                  const campusTextOnly = isTextOnlyPostLike(c);
                   return (
                     <View key={c.id} style={[styles.card, sparseCampusFeed && styles.cardSparse]}>
                       <View style={{ width: '100%', aspectRatio: 3 / 4, borderRadius: 12, overflow: 'hidden' }}>
                         <Pressable onPress={() => setGridViewerPost(c)} style={StyleSheet.absoluteFillObject}>
-                          <PostMediaTile post={c} style={StyleSheet.absoluteFillObject} borderRadius={12} />
+                          <PostMediaTile
+                            post={c}
+                            style={StyleSheet.absoluteFillObject}
+                            borderRadius={12}
+                            textCardStyle={campusTextOnly ? 'feedEditorial' : 'preset'}
+                            textCategoryTags={campusTextOnly ? campusFeedTextTags : undefined}
+                          />
                           <LinearGradient
                             colors={['transparent', 'rgba(0,0,0,0.82)']}
                             style={styles.cardFade}
@@ -1765,6 +1964,8 @@ const styles = StyleSheet.create({
   previewTile: { width: 54, height: 54, borderRadius: 8, overflow: 'hidden' },
   previewFill: { width: '100%', height: '100%' },
   flowingMedia: { width: '100%', aspectRatio: 4 / 3, borderRadius: 10, overflow: 'hidden' },
+  /** Text-only adventures: height follows copy + tags (no empty 4:3 frame). */
+  flowingMediaText: { width: '100%', borderRadius: 12, overflow: 'hidden' },
   modRow: { marginTop: 8, flexDirection: 'row', gap: 8 },
   modBtn: { borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12 },
   toggleWrap: { flexDirection: 'row', borderRadius: 14, padding: 2 },

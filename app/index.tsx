@@ -5,6 +5,7 @@ import { useAuth } from '../src/context/AuthContext';
 import { useAppTheme } from '../src/context/AppThemeContext';
 import { hasCompletedOnboarding } from '../src/lib/onboardingStorage';
 import { isSupabaseConfigured } from '../src/lib/supabaseConfig';
+import { tryGetSupabase } from '../src/lib/supabase';
 import { MissingConfigScreen } from '../src/screens/MissingConfigScreen';
 import { getColors } from '../src/theme';
 
@@ -25,7 +26,7 @@ export default function Index() {
         }
         return;
       }
-      const done = await hasCompletedOnboarding(session.user.id);
+      const done = await hasCompletedOnboarding(session.user.id, tryGetSupabase());
       if (!cancelled) {
         setOnboardingDone(done);
         setReady(true);

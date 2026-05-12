@@ -19,7 +19,7 @@ export default function NewSidequestScreen() {
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
   const scheme = resolvedScheme;
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
@@ -48,13 +48,13 @@ export default function NewSidequestScreen() {
       subtitle: subtitle.trim() ? subtitle.trim().slice(0, MAX_SIDEQUEST_SUBTITLE) : null,
       categories: selected,
       is_anonymous: anonymous,
-      approval_status: isAdmin ? 'approved' : 'pending',
+      approval_status: 'approved',
     });
     if (error) {
       Alert.alert('Publish failed', error.message);
       return;
     }
-    Alert.alert('Submitted for review', 'Your sidequest is pending approval before it appears publicly.');
+    Alert.alert("You're live", 'Your idea is on the feed.');
     router.replace('/(tabs)/feed');
   };
 

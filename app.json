@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sidekix",
     "slug": "sidekix",
-    "version": "3.2",
+    "version": "3.3",
     "orientation": "portrait",
     "icon": "./assets/lightning-logo.png",
     "userInterfaceStyle": "automatic",
@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vereofficial.vere",
+      "buildNumber": "31",
       "icon": "./assets/lightning-logo.png",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false

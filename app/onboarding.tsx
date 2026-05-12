@@ -45,7 +45,7 @@ const CONTENT_MAX = 420;
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const [idea, setIdea] = useState('');
   const [mode, setMode] = useState<HomeFeedMode>('feed');
   const [cats, setCats] = useState<string[]>([]);
@@ -77,7 +77,7 @@ export default function OnboardingScreen() {
       title: idea.trim(),
       categories: cats,
       is_anonymous: false,
-      approval_status: isAdmin ? 'approved' : 'pending',
+      approval_status: 'approved',
     });
     if (error) {
       setBusy(false);

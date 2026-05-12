@@ -6,6 +6,8 @@ import { ActivityIndicator, StyleSheet, Text, View, type ViewStyle } from 'react
 import { useAppTheme } from '../context/AppThemeContext';
 import { useReadableStorageUrl } from '../hooks/useReadableStorageUrl';
 import type { PostRow } from '../types/database';
+import { feedCategoryChipParts } from '../lib/categoryDisplay';
+import { feedV3TagSkin } from '../lib/feedV3Tokens';
 import { getTextPostPreset } from '../lib/textPostPresets';
 import { textMetricsForLength } from '../lib/textPostTextMetrics';
 import { HAS_EXPO_AV_VIDEO } from '../lib/videoSupport';
@@ -21,6 +23,10 @@ export function PostMediaTile({
   compact = false,
   loadVideo = true,
   autoPlayVideo = false,
+  /** Flat journal-style text card (feed) instead of gradient presets. */
+  textCardStyle = 'preset',
+  /** Shown on `feedEditorial` full-size cards (e.g. challenge / sidequest category chips). */
+  textCategoryTags,
 }: {
   post: PostLike;
   style?: ViewStyle;
@@ -28,6 +34,8 @@ export function PostMediaTile({
   compact?: boolean;
   loadVideo?: boolean;
   autoPlayVideo?: boolean;
+  textCardStyle?: 'preset' | 'feedEditorial';
+  textCategoryTags?: string[];
 }) {
   const videoRef = useRef<InstanceType<typeof Video> | null>(null);
   const { resolvedScheme } = useAppTheme();
@@ -87,6 +95,7 @@ export function PostMediaTile({
       <View style={base}>
         {imageMedia.displayUri ? (
           <Image
+            key={imageMedia.displayUri}
             source={{ uri: imageMedia.displayUri }}
             style={StyleSheet.absoluteFillObject}
             contentFit="cover"
@@ -103,8 +112,64 @@ export function PostMediaTile({
   }
 
   if (cap) {
-    const preset = getTextPostPreset(post.text_style);
     const isDark = resolvedScheme === 'dark';
+
+    if (textCardStyle === 'feedEditorial') {
+      const metrics = textMetricsForLength(cap.length, compact);
+      const tk = feedV3TagSkin(resolvedScheme);
+      const tags = (textCategoryTags ?? []).filter(Boolean).slice(0, 6);
+
+      return (
+        <View
+          style={[
+            ...base,
+            {
+              backgroundColor: 'transparent',
+              borderWidth: 0,
+              flexDirection: 'column',
+            },
+          ]}
+        >
+          <View style={compact ? [styles.textBodyWrap, styles.textBodyWrapCompact] : styles.editorialBody}>
+            <Text
+              style={{
+                color: colors.text1,
+                fontFamily: font.serifItalic,
+                textAlign: compact ? 'center' : 'left',
+                width: '100%',
+                fontSize: metrics.fontSize,
+                lineHeight: metrics.lineHeight,
+                letterSpacing: compact ? -0.1 : 0,
+              }}
+              numberOfLines={metrics.maxLines}
+            >
+              {cap}
+            </Text>
+          </View>
+          {!compact && tags.length > 0 ? (
+            <View style={styles.editorialTagsRow}>
+              {tags.map((raw, i) => {
+                const { emoji, title } = feedCategoryChipParts(raw);
+                return (
+                  <View
+                    key={`${raw}-${i}`}
+                    style={[
+                      styles.editorialTagPill,
+                      { borderColor: tk.borderColor, backgroundColor: tk.backgroundColor },
+                    ]}
+                  >
+                    <Text style={styles.editorialTagEmoji}>{emoji}</Text>
+                    <Text style={[styles.editorialTagWord, { color: tk.color, fontFamily: font.dmBold }]}>{title}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+      );
+    }
+
+    const preset = getTextPostPreset(post.text_style);
     const stops = isDark ? preset.dark : preset.light;
     const borderC = isDark ? preset.accentBorderDark : preset.accentBorderLight;
     const fg = isDark ? preset.textDark : preset.textLight;
@@ -225,6 +290,34 @@ const styles = StyleSheet.create({
     paddingBottom: 9,
     justifyContent: 'flex-start',
   },
+  /** Feed editorial: no flex grow — avoids a tall empty gap above category pills. */
+  editorialBody: {
+    width: '100%',
+    alignSelf: 'stretch',
+    paddingTop: 4,
+    paddingBottom: 2,
+    justifyContent: 'flex-start',
+    alignItems: 'stretch',
+  },
+  editorialTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  editorialTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    maxWidth: '100%',
+  },
+  editorialTagEmoji: { fontSize: 13, lineHeight: 16 },
+  editorialTagWord: { fontSize: 10.5, lineHeight: 14 },
   textBodyWrapCompact: {
     paddingHorizontal: 5,
     paddingVertical: 4,

@@ -5,13 +5,13 @@ import { PostMediaTile } from './PostMediaTile';
 import { localCalendarYmd } from '../lib/calendarDate';
 import { font } from '../theme';
 import type { ThemeColors } from '../theme';
-import type { PostRow } from '../types/database';
+import type { JournalPost } from '../hooks/useMyPosts';
 
 const TABLET_CONTENT_MAX = 640;
 const DAY_THUMB = 56;
 
 type Props = {
-  posts: PostRow[];
+  posts: JournalPost[];
   colors: ThemeColors;
 };
 
@@ -41,7 +41,7 @@ export function MyPostsJournal({ posts, colors }: Props) {
   }, [calendarCursor]);
 
   const postsByYmd = useMemo(() => {
-    const map = new Map<string, PostRow[]>();
+    const map = new Map<string, JournalPost[]>();
     posts.forEach((p) => {
       const ymd = localCalendarYmd(new Date(p.created_at));
       const cur = map.get(ymd) ?? [];
