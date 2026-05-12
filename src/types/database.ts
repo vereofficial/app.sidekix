@@ -65,18 +65,19 @@ export type SidequestPostVoteRow = {
   created_at: string;
 };
 
+export type SidequestSaveRow = {
+  id: string;
+  sidequest_id: string;
+  user_id: string;
+  created_at: string;
+};
+
+/** One line in Home scratch pad ("want to try" / "done & remembered"). */
 export type PersonalScratchpadLineRow = {
   id: string;
   user_id: string;
   bucket: 'wish' | 'mem';
   line_text: string;
-  created_at: string;
-};
-
-export type SidequestSaveRow = {
-  id: string;
-  sidequest_id: string;
-  user_id: string;
   created_at: string;
 };
 

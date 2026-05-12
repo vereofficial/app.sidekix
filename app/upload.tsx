@@ -286,7 +286,7 @@ export default function UploadScreen() {
             you&apos;re already in for this sidequest
           </Text>
           <Text style={[styles.doneSub, { color: colors.text2, fontFamily: font.dm }]}>
-            one post per sidequest. Catch reactions on the feed until the next drop (Mon or Fri).
+            one post per sidequest. Catch reactions on the feed.
           </Text>
           <Pressable
             onPress={() => router.replace('/(tabs)/feed')}

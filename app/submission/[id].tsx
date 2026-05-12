@@ -3,16 +3,32 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { challengeTag, splitChallengeTitle } from '../../src/challenge';
+import { PostMediaTile } from '../../src/components/PostMediaTile';
 import { useAuth } from '../../src/context/AuthContext';
 import { useAppTheme } from '../../src/context/AppThemeContext';
-import { PostMediaTile } from '../../src/components/PostMediaTile';
-import { MARKETING_SITE_URL, postShareUrl } from '../../src/constants/shareLinks';
-import { isR2ObjectPath } from '../../src/lib/r2MediaConfig';
+import { copyPostLink, sharePostLink } from '../../src/lib/sharePost';
+import { postShareUrl } from '../../src/constants/shareLinks';
+import { activeSidequestTag } from '../../src/lib/sidequestPeriod';
 import { tryGetSupabase } from '../../src/lib/supabase';
 import { font, getColors } from '../../src/theme';
-import type { ChallengeRow, PostRow, SidequestPostRow } from '../../src/types/database';
+import type { ChallengeRow, PostRow, SidequestPostRow, SidequestRow } from '../../src/types/database';
 
-type LoadedPost = PostRow & { _source?: 'legacy' | 'sidequest' };
+type SubmissionSource = 'legacy' | 'sidequest';
+
+function sidequestPostToTile(sp: SidequestPostRow): PostRow {
+  return {
+    id: sp.id,
+    challenge_id: 'sidequest',
+    user_id: sp.user_id,
+    body: sp.body,
+    image_path: sp.image_path,
+    video_path: sp.video_path,
+    is_anonymous: sp.is_anonymous,
+    caption: sp.body,
+    text_style: null,
+    created_at: sp.created_at,
+  };
+}
 
 export default function SubmissionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -21,9 +37,10 @@ export default function SubmissionDetailScreen() {
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
   const { user } = useAuth();
-  const [post, setPost] = useState<LoadedPost | null>(null);
+  const [post, setPost] = useState<PostRow | null>(null);
   const [challenge, setChallenge] = useState<ChallengeRow | null>(null);
-  const [sidequestTitle, setSidequestTitle] = useState<string | null>(null);
+  const [sidequest, setSidequest] = useState<SidequestRow | null>(null);
+  const [submissionSource, setSubmissionSource] = useState<SubmissionSource | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -41,11 +58,21 @@ export default function SubmissionDetailScreen() {
         setLoading(false);
         return;
       }
-      const { data: legacy, error: legErr } = await sb.from('posts').select('*').eq('id', id).eq('user_id', user.id).maybeSingle();
-      if (!legErr && legacy) {
-        const row = legacy as PostRow;
-        setPost({ ...row, _source: 'legacy' });
-        setSidequestTitle(null);
+      const { data: legacyRow, error: legacyErr } = await sb.from('posts').select('*').eq('id', id).eq('user_id', user.id).maybeSingle();
+      if (legacyErr) {
+        setErr(legacyErr.message);
+        setPost(null);
+        setChallenge(null);
+        setSidequest(null);
+        setSubmissionSource(null);
+        setLoading(false);
+        return;
+      }
+      if (legacyRow) {
+        const row = legacyRow as PostRow;
+        setPost(row);
+        setSubmissionSource('legacy');
+        setSidequest(null);
         setErr(null);
         const { data: ch } = await sb.from('challenges').select('*').eq('id', row.challenge_id).maybeSingle();
         setChallenge((ch ?? null) as ChallengeRow | null);
@@ -53,93 +80,79 @@ export default function SubmissionDetailScreen() {
         return;
       }
 
-      const { data: sq, error: sqErr } = await sb
+      const { data: sqRow, error: sqErr } = await sb
         .from('sidequest_posts')
-        .select('*, sidequests(title)')
+        .select('*')
         .eq('id', id)
         .eq('user_id', user.id)
         .maybeSingle();
-
-      if (!sqErr && sq) {
-        const r = sq as SidequestPostRow & { sidequests?: { title: string } | null };
-        const title = r.sidequests?.title ?? 'Sidequest';
-        setSidequestTitle(title);
+      if (sqErr || !sqRow) {
+        setErr(sqErr?.message ?? 'Not found');
+        setPost(null);
         setChallenge(null);
-        setPost({
-          id: r.id,
-          challenge_id: r.sidequest_id,
-          user_id: r.user_id,
-          image_path: r.image_path,
-          video_path: r.video_path,
-          body: r.body,
-          is_anonymous: r.is_anonymous,
-          created_at: r.created_at,
-          caption: title,
-          _source: 'sidequest',
-        });
+        setSidequest(null);
+        setSubmissionSource(null);
+      } else {
+        const sp = sqRow as SidequestPostRow;
+        setPost(sidequestPostToTile(sp));
+        setChallenge(null);
+        setSubmissionSource('sidequest');
         setErr(null);
-        setLoading(false);
-        return;
+        const { data: sqMeta } = await sb.from('sidequests').select('*').eq('id', sp.sidequest_id).maybeSingle();
+        setSidequest((sqMeta ?? null) as SidequestRow | null);
       }
-
-      setErr('Not found');
-      setPost(null);
-      setChallenge(null);
-      setSidequestTitle(null);
       setLoading(false);
     };
     void load();
   }, [id, user?.id]);
 
   const deletePost = async () => {
-    if (!post?.id || !user?.id) return;
+    if (!post?.id || !user?.id || !submissionSource) return;
     const sb = tryGetSupabase();
     if (!sb) {
       Alert.alert('Offline', 'Try again when you’re connected.');
       return;
     }
-    const isSq = post._source === 'sidequest';
-    Alert.alert(
-      'Delete this post?',
-      isSq
-        ? 'This removes your adventure from this sidequest.'
-        : 'This removes your take and its reactions. You can post again for this sidequest if the window is still open.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              setDeleting(true);
-              try {
-                const paths = [post.image_path, post.video_path].filter((p): p is string => Boolean(p?.trim()));
-                const supabaseOnly = paths.filter((p) => !isR2ObjectPath(p));
-                if (supabaseOnly.length > 0) {
-                  const { error: stErr } = await sb.storage.from('post-media').remove(supabaseOnly);
-                  if (stErr) throw stErr;
-                }
-                if (isSq) {
-                  const { error: delErr } = await sb.from('sidequest_posts').delete().eq('id', post.id).eq('user_id', user.id);
-                  if (delErr) throw delErr;
-                } else {
-                  const { error: delErr } = await sb.from('posts').delete().eq('id', post.id).eq('user_id', user.id);
-                  if (delErr) throw delErr;
-                }
-                router.back();
-              } catch (e) {
-                Alert.alert('Could not delete', e instanceof Error ? e.message : 'Something went wrong.');
-              } finally {
-                setDeleting(false);
+    const deleteMessage =
+      submissionSource === 'legacy'
+        ? 'This removes your take and its reactions. You can post again for this sidequest if the window is still open.'
+        : 'This removes your adventure and its reactions on this idea.';
+    Alert.alert('Delete this post?', deleteMessage, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setDeleting(true);
+            try {
+              const paths = [post.image_path, post.video_path].filter((p): p is string => Boolean(p?.trim()));
+              const supabaseOnly = paths.filter((p) => !p.startsWith('r2/'));
+              if (supabaseOnly.length > 0) {
+                const { error: stErr } = await sb.storage.from('post-media').remove(supabaseOnly);
+                if (stErr) throw stErr;
               }
-            })();
-          },
+              if (submissionSource === 'legacy') {
+                const { error: delErr } = await sb.from('posts').delete().eq('id', post.id).eq('user_id', user.id);
+                if (delErr) throw delErr;
+              } else {
+                const { error: delErr } = await sb.from('sidequest_posts').delete().eq('id', post.id).eq('user_id', user.id);
+                if (delErr) throw delErr;
+              }
+              router.back();
+            } catch (e) {
+              Alert.alert('Could not delete', e instanceof Error ? e.message : 'Something went wrong.');
+            } finally {
+              setDeleting(false);
+            }
+          })();
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const cap = (post?.body ?? post?.caption ?? '').trim();
+  /** Text-only posts already show copy inside PostMediaTile — don’t duplicate below the card. */
   const showCaptionBelowCard =
     !!post &&
     cap.length > 0 &&
@@ -150,7 +163,6 @@ export default function SubmissionDetailScreen() {
     : { before: '', after: '' };
 
   const destructive = resolvedScheme === 'dark' ? '#FF6B6B' : '#C62828';
-  const isSidequestPost = post?._source === 'sidequest';
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
@@ -196,74 +208,49 @@ export default function SubmissionDetailScreen() {
                   {challengeTitleParts.after}
                 </Text>
               </View>
-            ) : isSidequestPost && sidequestTitle ? (
+            ) : sidequest ? (
               <View style={styles.sidequestHeader}>
-                <Text style={[styles.challengeTag, { color: colors.text3, fontFamily: font.syne }]}>SIDEQUEST</Text>
+                <Text style={[styles.challengeTag, { color: colors.text3, fontFamily: font.syne }]}>
+                  {activeSidequestTag()}
+                </Text>
                 <Text style={[styles.challengeTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
-                  {sidequestTitle}
+                  {sidequest.title}
                 </Text>
               </View>
             ) : null}
-            {isSidequestPost ? (
-              <Text selectable style={[styles.shareUrl, { color: colors.text2, fontFamily: font.dm }]}>
-                {MARKETING_SITE_URL}
-              </Text>
-            ) : (
-              <Text selectable style={[styles.shareUrl, { color: colors.text2, fontFamily: font.dm }]}>
-                {postShareUrl(post.id)}
-              </Text>
-            )}
+            <Text selectable style={[styles.shareUrl, { color: colors.text2, fontFamily: font.dm }]}>
+              {postShareUrl(post.id)}
+            </Text>
             <View style={styles.shareRow}>
-              {isSidequestPost ? (
-                <Pressable
-                  onPress={() => router.push(`/sidequest/${post.challenge_id}`)}
-                  style={({ pressed }) => [
-                    styles.shareBtn,
-                    { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1 },
+              <Pressable
+                onPress={() => void sharePostLink(post.id)}
+                style={({ pressed }) => [
+                  styles.shareBtn,
+                  { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1 },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.shareBtnText,
+                    { color: resolvedScheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.shareBtnText,
-                      { color: resolvedScheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne },
-                    ]}
-                  >
-                    open sidequest
-                  </Text>
-                </Pressable>
-              ) : (
-                <>
-                  <Pressable
-                    onPress={() => void sharePostLink(post.id)}
-                    style={({ pressed }) => [
-                      styles.shareBtn,
-                      { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1 },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.shareBtnText,
-                        { color: resolvedScheme === 'light' ? '#fff' : '#0a0a0a', fontFamily: font.syne },
-                      ]}
-                    >
-                      share…
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => void copyPostLink(post.id)}
-                    style={({ pressed }) => [
-                      styles.shareBtnOutline,
-                      {
-                        borderColor: colors.border2,
-                        backgroundColor: colors.card,
-                        opacity: pressed ? 0.88 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.shareBtnText, { color: colors.text1, fontFamily: font.syne }]}>copy</Text>
-                  </Pressable>
-                </>
-              )}
+                  share…
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void copyPostLink(post.id)}
+                style={({ pressed }) => [
+                  styles.shareBtnOutline,
+                  {
+                    borderColor: colors.border2,
+                    backgroundColor: colors.card,
+                    opacity: pressed ? 0.88 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.shareBtnText, { color: colors.text1, fontFamily: font.syne }]}>copy</Text>
+              </Pressable>
             </View>
           </View>
         </ScrollView>

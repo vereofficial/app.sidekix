@@ -1,12 +1,10 @@
 import { getR2PublicMediaBase, isR2ObjectPath } from './r2MediaConfig';
 import { tryGetSupabase } from './supabase';
 
-let didWarnR2MissingPublicBase = false;
-
 function r2PublicObjectUrl(trimmed: string): string | null {
   const base = getR2PublicMediaBase();
   if (!base) return null;
-  const key = trimmed.replace(/^r2\//i, '');
+  const key = trimmed.replace(/^r2\//, '');
   if (!key) return null;
   return `${base}/${key.split('/').map(encodeURIComponent).join('/')}`;
 }
@@ -43,16 +41,7 @@ export async function getReadablePostMediaUrl(path: string): Promise<string | nu
   if (!trimmed) return null;
 
   if (isR2ObjectPath(trimmed)) {
-    const url = r2PublicObjectUrl(trimmed);
-    if (!url && !didWarnR2MissingPublicBase) {
-      didWarnR2MissingPublicBase = true;
-      console.warn(
-        '[Sidekix media] Database paths use R2 (r2/…) but no public read URL is configured. ' +
-          'Set EXPO_PUBLIC_R2_PUBLIC_MEDIA_URL to your bucket’s public HTTPS origin (see supabase/functions/README.md). ' +
-          'For EAS builds, set it in app env / Expo dashboard and rebuild so app.config.js can embed extra.r2PublicMediaUrl.',
-      );
-    }
-    return url;
+    return r2PublicObjectUrl(trimmed);
   }
 
   const sb = tryGetSupabase();

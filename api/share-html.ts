@@ -1,10 +1,19 @@
 /**
  * Server-rendered share page + Open Graph for https://share.joinsidekix.com/p/[postId]
- * Routed via vercel.json — crawlers and humans get real HTML (no JS required for meta).
+ *
+ * Requires `SUPABASE_SERVICE_ROLE_KEY` on Vercel — resolves both `posts` (weekly challenges)
+ * and `sidequest_posts` (community ideas) the same way, bypasses RLS, and signs `post-media`
+ * URLs so video/image work when the bucket is private.
  */
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const IOS_APP_STORE_LISTING_URL = 'https://apps.apple.com/app/id6742329686';
+
+/** Bumped when share SSR changes. Live site: inspect `<html>` for this attribute. */
+const SHARE_SSR_REVISION = '20260607a';
 
 function esc(s: string): string {
   return s
@@ -21,7 +30,155 @@ function splitTitle(title: string, emphasis: string): { before: string; after: s
   return { before: title.slice(0, i), after: title.slice(i + emphasis.length) };
 }
 
-type PostRow = {
+function r2PublicObjectUrl(trimmed: string): string | null {
+  const base = (process.env.EXPO_PUBLIC_R2_PUBLIC_MEDIA_URL ?? process.env.R2_PUBLIC_MEDIA_URL ?? '').replace(/\/$/, '');
+  if (!base) return null;
+  const key = trimmed.replace(/^r2\//, '');
+  if (!key) return null;
+  return `${base}/${key.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function htmlShell(docTitle: string, inner: string): string {
+  return `<!DOCTYPE html>
+<html lang="en" data-sidekix-share="${SHARE_SSR_REVISION}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <title>${esc(docTitle)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,800;1,9..40,400&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: radial-gradient(120% 80% at 50% -10%, #1a2210 0%, #0a0a0a 45%, #050505 100%);
+      color: #eceae6;
+      -webkit-font-smoothing: antialiased;
+    }
+    .shell { max-width: 440px; margin: 0 auto; padding: 28px 20px 56px; }
+    .pill {
+      display: inline-block;
+      font-family: 'Syne', sans-serif;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #c8e060;
+      border: 1px solid rgba(212, 255, 63, 0.35);
+      border-radius: 999px;
+      padding: 7px 14px;
+      margin-bottom: 18px;
+      background: rgba(212, 255, 63, 0.06);
+    }
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 1.45rem;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+      margin: 0 0 10px;
+      color: #f4f2ec;
+    }
+    h1 .em { color: #d4ff3f; }
+    .by {
+      font-size: 14px;
+      color: #9a968c;
+      margin-bottom: 22px;
+    }
+    .card {
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.35) 100%);
+      box-shadow: 0 24px 48px rgba(0,0,0,0.45);
+      aspect-ratio: 3 / 4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .card img, .card video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .card .textfill {
+      padding: 22px 20px;
+      font-size: 1.05rem;
+      line-height: 1.45;
+      color: #f0ebe3;
+      text-align: left;
+      align-self: stretch;
+      overflow: auto;
+    }
+    .vid-fallback {
+      text-align: center;
+      padding: 28px 20px;
+      color: #9a968c;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .vid-fallback .play {
+      width: 64px; height: 64px; margin: 0 auto 14px;
+      border-radius: 50%;
+      border: 2px solid rgba(212,255,63,0.5);
+      color: #d4ff3f;
+      font-size: 28px;
+      line-height: 60px;
+      font-weight: 700;
+    }
+    .cap {
+      margin-top: 18px;
+      font-size: 15px;
+      line-height: 1.5;
+      color: #c9c4ba;
+      white-space: pre-wrap;
+    }
+    .cta {
+      display: block;
+      margin-top: 28px;
+      text-align: center;
+      padding: 16px 22px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #5a7a00, #6d8f00);
+      color: #fff !important;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      text-decoration: none;
+      box-shadow: 0 12px 28px rgba(90, 122, 0, 0.35);
+    }
+    .err { color: #c9c4ba; font-size: 15px; line-height: 1.55; margin-top: 8px; }
+    .code { font-size: 12px; color: #6d6a62; margin-top: 16px; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    ${inner}
+  </div>
+</body>
+</html>`;
+}
+
+function errorPage(title: string, message: string, hint?: string): string {
+  return htmlShell(
+    title,
+    `
+    <div class="pill">sidekix</div>
+    <h1>${esc(title)}</h1>
+    <p class="err">${esc(message)}</p>
+    ${hint ? `<p class="code">${esc(hint)}</p>` : ''}
+    <a class="cta" href="${esc(IOS_APP_STORE_LISTING_URL)}">get the app →</a>
+  `,
+  );
+}
+
+type LegacyPost = {
   id: string;
   challenge_id: string;
   user_id: string;
@@ -32,36 +189,26 @@ type PostRow = {
   is_anonymous: boolean;
 };
 
-type ChallengeRow = {
+type SqPost = {
   id: string;
-  title: string;
-  emphasis: string;
+  sidequest_id: string;
+  user_id: string;
+  image_path: string | null;
+  video_path: string | null;
+  body: string | null;
+  is_anonymous: boolean;
 };
 
-type ProfileRow = {
-  username: string;
-};
-
-function publicStorageUrl(supabaseUrl: string, path: string | null | undefined): string | null {
+async function resolveStorageUrl(
+  supabase: SupabaseClient,
+  path: string | null | undefined,
+): Promise<string | null> {
   const p = path?.trim();
   if (!p) return null;
-  if (/^r2\//i.test(p)) {
-    const base = (process.env.EXPO_PUBLIC_R2_PUBLIC_MEDIA_URL ?? process.env.R2_PUBLIC_MEDIA_URL ?? '').replace(/\/$/, '');
-    if (!base) return null;
-    const key = p.replace(/^r2\//i, '');
-    const encoded = key
-      .split('/')
-      .filter(Boolean)
-      .map((seg) => encodeURIComponent(seg))
-      .join('/');
-    return `${base}/${encoded}`;
-  }
-  const encoded = p
-    .split('/')
-    .filter(Boolean)
-    .map((seg) => encodeURIComponent(seg))
-    .join('/');
-  return `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/post-media/${encoded}`;
+  if (p.startsWith('r2/')) return r2PublicObjectUrl(p);
+  const { data, error } = await supabase.storage.from('post-media').createSignedUrl(p, 60 * 60 * 12);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -73,151 +220,261 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rawId = typeof req.query.postId === 'string' ? req.query.postId : Array.isArray(req.query.postId) ? req.query.postId[0] : '';
   const postId = (rawId ?? '').trim();
   if (!postId || !UUID_RE.test(postId)) {
-    res.status(400).setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end('<!DOCTYPE html><html><head><title>Invalid link</title></head><body><p>Invalid link.</p></body></html>');
+    res
+      .status(400)
+      .setHeader('Content-Type', 'text/html; charset=utf-8')
+      .end(errorPage('Invalid link', 'This URL is not a valid post id.', postId));
     return;
   }
 
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, '');
-  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !anonKey) {
-    res.status(503).setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end(
-      '<!DOCTYPE html><html><head><title>Unavailable</title></head><body><p>Share preview is not configured.</p></body></html>',
-    );
+  const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL)?.replace(/\/$/, '');
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!supabaseUrl || !serviceKey) {
+    res
+      .status(503)
+      .setHeader('Content-Type', 'text/html; charset=utf-8')
+      .end(
+        errorPage(
+          'Share unavailable',
+          'This server is missing SUPABASE_SERVICE_ROLE_KEY (and URL). Add them in Vercel project env, redeploy, and open the link again.',
+          'Required: EXPO_PUBLIC_SUPABASE_URL or SUPABASE_URL, plus SUPABASE_SERVICE_ROLE_KEY.',
+        ),
+      );
     return;
   }
+
+  const supabase = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const [{ data: legacy, error: e1 }, { data: adventure, error: e2 }] = await Promise.all([
+    supabase.from('posts').select('*').eq('id', postId).maybeSingle(),
+    supabase.from('sidequest_posts').select('*').eq('id', postId).maybeSingle(),
+  ]);
+
+  if (e1 || e2) {
+    res
+      .status(502)
+      .setHeader('Content-Type', 'text/html; charset=utf-8')
+      .end(errorPage('Could not load', e1?.message ?? e2?.message ?? 'Database error.'));
+    return;
+  }
+
+  const lp = legacy as LegacyPost | null;
+  const sp = adventure as SqPost | null;
+
+  if (!lp && !sp) {
+    res.status(404).setHeader('Content-Type', 'text/html; charset=utf-8').end(errorPage('Not found', 'No post exists for this link.'));
+    return;
+  }
+
+  let imagePath: string | null = null;
+  let videoPath: string | null = null;
+  let caption: string;
+  let isAnon: boolean;
+  let userId: string;
+  let titleHtml: string;
+  let titlePlain: string;
+
+  if (lp) {
+    userId = lp.user_id;
+    isAnon = lp.is_anonymous;
+    imagePath = lp.image_path?.trim() || null;
+    videoPath = lp.video_path?.trim() || null;
+    caption = (lp.body ?? lp.caption ?? '').trim();
+    const { data: ch } = await supabase.from('challenges').select('title, emphasis').eq('id', lp.challenge_id).maybeSingle();
+    if (ch && typeof (ch as { title?: string }).title === 'string') {
+      const row = ch as { title: string; emphasis: string };
+      const { before, after } = splitTitle(row.title, row.emphasis ?? '');
+      titleHtml = `${esc(before)}<span class="em">${esc(row.emphasis ?? '')}</span>${esc(after)}`;
+      titlePlain = `${before}${row.emphasis ?? ''}${after}`.replace(/\s+/g, ' ').trim();
+    } else {
+      titleHtml = esc('Campus challenge');
+      titlePlain = 'Campus challenge';
+    }
+  } else {
+    const s = sp!;
+    userId = s.user_id;
+    isAnon = s.is_anonymous;
+    imagePath = s.image_path?.trim() || null;
+    videoPath = s.video_path?.trim() || null;
+    caption = (s.body ?? '').trim();
+    const { data: sq } = await supabase.from('sidequests').select('title').eq('id', s.sidequest_id).maybeSingle();
+    const t = (sq as { title?: string } | null)?.title?.trim();
+    titlePlain = t ?? 'Sidequest';
+    titleHtml = esc(titlePlain);
+  }
+
+  let username: string | null = null;
+  if (!isAnon) {
+    const { data: prof } = await supabase.from('profiles').select('username').eq('id', userId).maybeSingle();
+    username = (prof as { username?: string } | null)?.username?.trim() ?? null;
+  }
+
+  const byline = isAnon ? 'anonymous' : username ? `@${esc(username)}` : 'campus';
+
+  const ogTitle = isAnon ? 'A campus take · Sidekix' : username ? `@${username} · Sidekix` : 'Campus take · Sidekix';
+  const ogDesc =
+    caption.length > 0 ? (caption.length > 200 ? `${caption.slice(0, 197)}…` : caption) : titlePlain || 'Sidekix';
+
+  const [imageUrl, videoUrl] = await Promise.all([resolveStorageUrl(supabase, imagePath), resolveStorageUrl(supabase, videoPath)]);
 
   const host = (req.headers['x-forwarded-host'] as string) || req.headers.host || 'share.joinsidekix.com';
   const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
   const origin = `${proto}://${host}`;
   const canonical = `${origin}/p/${postId}`;
 
-  const headers = {
-    apikey: anonKey,
-    Authorization: `Bearer ${anonKey}`,
-    Accept: 'application/json',
-  };
+  let ogImage = imageUrl;
+  if (!ogImage && !videoPath) ogImage = `${origin}/favicon.ico`;
+  else if (!ogImage) ogImage = `${origin}/favicon.ico`;
 
-  const postRes = await fetch(`${supabaseUrl}/rest/v1/posts?id=eq.${postId}&select=*`, { headers });
-  if (!postRes.ok) {
-    res.status(502).setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end('<!DOCTYPE html><html><head><title>Error</title></head><body><p>Could not load post.</p></body></html>');
-    return;
-  }
-  const posts = (await postRes.json()) as PostRow[];
-  const post = posts[0];
-  if (!post) {
-    res.status(404).setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end(
-      '<!DOCTYPE html><html><head><title>Not found</title></head><body><p>This post could not be found.</p></body></html>',
-    );
-    return;
-  }
+  const showCapBelow = caption.length > 0 && (Boolean(imageUrl) || Boolean(videoUrl));
 
-  const chRes = await fetch(
-    `${supabaseUrl}/rest/v1/challenges?id=eq.${post.challenge_id}&select=id,title,emphasis`,
-    { headers },
-  );
-  const challenges = chRes.ok ? ((await chRes.json()) as ChallengeRow[]) : [];
-  const challenge = challenges[0];
-
-  let username: string | null = null;
-  if (!post.is_anonymous) {
-    const prRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${post.user_id}&select=username`, { headers });
-    const profs = prRes.ok ? ((await prRes.json()) as ProfileRow[]) : [];
-    username = profs[0]?.username ?? null;
+  let mediaInner: string;
+  if (imageUrl) {
+    mediaInner = `<img src="${esc(imageUrl)}" alt="" width="720" height="960" />`;
+  } else if (videoUrl) {
+    mediaInner = `<video src="${esc(videoUrl)}" controls playsinline preload="metadata" poster=""></video>`;
+  } else if (videoPath && !videoUrl) {
+    const r2 = videoPath.startsWith('r2/');
+    const msg = r2
+      ? 'This clip uses app-only storage. Open the post in Sidekix to watch.'
+      : 'Preview link could not be generated. Open the post in Sidekix to watch.';
+    mediaInner = `<div class="vid-fallback"><div class="play">▶</div>${esc(msg)}</div>`;
+  } else if (caption) {
+    mediaInner = `<div class="textfill">${esc(caption)}</div>`;
+  } else {
+    mediaInner = `<div class="vid-fallback">No preview for this post.</div>`;
   }
 
-  const cap = (post.body ?? post.caption ?? '').trim();
-  let headline = 'Sidekix';
-  if (challenge) {
-    const { before, after } = splitTitle(challenge.title, challenge.emphasis);
-    headline = `${before}${challenge.emphasis}${after}`.replace(/\s+/g, ' ').trim();
-  }
-  const ogTitle = post.is_anonymous ? `A campus take · Sidekix` : username ? `@${username} · Sidekix` : `Campus take · Sidekix`;
+  const body = `
+    <div class="pill">sidekix · share</div>
+    <h1>${titleHtml}</h1>
+    <div class="by">${byline}</div>
+    <div class="card">${mediaInner}</div>
+    ${showCapBelow ? `<p class="cap">${esc(caption)}</p>` : ''}
+    <a class="cta" href="${esc(IOS_APP_STORE_LISTING_URL)}">post yours in Sidekix →</a>
+  `;
 
-  const ogDesc =
-    cap.length > 0
-      ? cap.length > 200
-        ? `${cap.slice(0, 197)}…`
-        : cap
-      : headline;
-
-  const imgPath = post.image_path?.trim() ? post.image_path : null;
-  const vidPath = post.video_path?.trim() ? post.video_path : null;
-  let ogImage = publicStorageUrl(supabaseUrl, imgPath);
-  if (!ogImage && !vidPath) {
-    ogImage = `${origin}/favicon.ico`;
-  } else if (!ogImage && vidPath) {
-    ogImage = `${origin}/favicon.ico`;
-  }
-  const ogImageUrl = ogImage ?? `${origin}/favicon.ico`;
-
-  const visibleTitle = esc(ogTitle);
-  const visibleDesc = esc(ogDesc);
-  const challengeHtml = challenge
-    ? (() => {
-        const { before, after } = splitTitle(challenge.title, challenge.emphasis);
-        return `<span>${esc(before)}</span><span style="color:#D4FF3F">${esc(challenge.emphasis)}</span><span>${esc(after)}</span>`;
-      })()
-    : 'Sidequest';
-
-  const byline = post.is_anonymous ? 'anonymous' : username ? `@${esc(username)}` : 'campus';
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
+  const page = `<!DOCTYPE html>
+<html lang="en" data-sidekix-share="${SHARE_SSR_REVISION}">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${visibleTitle}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <title>${esc(ogTitle)}</title>
   <link rel="canonical" href="${esc(canonical)}" />
-  <meta property="og:title" content="${visibleTitle}" />
-  <meta property="og:description" content="${visibleDesc}" />
-  <meta property="og:image" content="${esc(ogImageUrl)}" />
+  <meta property="og:title" content="${esc(ogTitle)}" />
+  <meta property="og:description" content="${esc(ogDesc)}" />
+  <meta property="og:image" content="${esc(ogImage ?? `${origin}/favicon.ico`)}" />
   <meta property="og:url" content="${esc(canonical)}" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Sidekix" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="${visibleTitle}" />
-  <meta name="twitter:description" content="${visibleDesc}" />
-  <meta name="twitter:image" content="${esc(ogImageUrl)}" />
-  <meta name="description" content="${visibleDesc}" />
+  <meta name="twitter:title" content="${esc(ogTitle)}" />
+  <meta name="twitter:description" content="${esc(ogDesc)}" />
+  <meta name="twitter:image" content="${esc(ogImage ?? `${origin}/favicon.ico`)}" />
+  <meta name="description" content="${esc(ogDesc)}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
   <style>
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0a0a0a; color:#eee; }
-    .wrap { max-width: 480px; margin: 0 auto; padding: 24px 18px 48px; }
-    .brand { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color:#888; margin-bottom: 8px; }
-    h1 { font-size: 22px; line-height: 1.25; margin: 0 0 8px; font-weight: 800; }
-    .by { color:#aaa; font-size: 14px; margin-bottom: 16px; }
-    .media { border-radius: 16px; overflow: hidden; border: 1px solid #2a2a2a; background:#111; aspect-ratio: 3/4; display:flex; align-items:center; justify-content:center; color:#666; font-size: 14px; }
-    .media img { width:100%; height:100%; object-fit: cover; display:block; }
-    .cap { margin-top: 16px; font-size: 15px; line-height: 1.45; color:#ddd; white-space: pre-wrap; }
-    .cta { display: block; margin-top: 24px; text-align: center; padding: 16px 20px; border-radius: 999px; background: #5a7a00; color: #fff; font-weight: 800; text-decoration: none; font-size: 15px; }
-    .hint { margin-top: 20px; font-size: 12px; color:#666; line-height: 1.4; text-align: center; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: radial-gradient(120% 80% at 50% -10%, #1a2210 0%, #0a0a0a 45%, #050505 100%);
+      color: #eceae6;
+      -webkit-font-smoothing: antialiased;
+    }
+    .shell { max-width: 440px; margin: 0 auto; padding: 28px 20px 56px; }
+    .pill {
+      display: inline-block;
+      font-family: 'Syne', sans-serif;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #c8e060;
+      border: 1px solid rgba(212, 255, 63, 0.35);
+      border-radius: 999px;
+      padding: 7px 14px;
+      margin-bottom: 18px;
+      background: rgba(212, 255, 63, 0.06);
+    }
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 1.45rem;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+      margin: 0 0 10px;
+      color: #f4f2ec;
+    }
+    h1 .em { color: #d4ff3f; }
+    .by { font-size: 14px; color: #9a968c; margin-bottom: 22px; }
+    .card {
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.35) 100%);
+      box-shadow: 0 24px 48px rgba(0,0,0,0.45);
+      aspect-ratio: 3 / 4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .card img, .card video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .card .textfill {
+      padding: 22px 20px;
+      font-size: 1.05rem;
+      line-height: 1.45;
+      color: #f0ebe3;
+      text-align: left;
+      align-self: stretch;
+      overflow: auto;
+    }
+    .vid-fallback {
+      text-align: center;
+      padding: 28px 20px;
+      color: #9a968c;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .vid-fallback .play {
+      width: 64px; height: 64px; margin: 0 auto 14px;
+      border-radius: 50%;
+      border: 2px solid rgba(212,255,63,0.5);
+      color: #d4ff3f;
+      font-size: 28px;
+      line-height: 60px;
+      font-weight: 700;
+    }
+    .cap { margin-top: 18px; font-size: 15px; line-height: 1.5; color: #c9c4ba; white-space: pre-wrap; }
+    .cta {
+      display: block;
+      margin-top: 28px;
+      text-align: center;
+      padding: 16px 22px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #5a7a00, #6d8f00);
+      color: #fff !important;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      text-decoration: none;
+      box-shadow: 0 12px 28px rgba(90, 122, 0, 0.35);
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="brand">sidekix</div>
-    <h1>${challengeHtml}</h1>
-    <div class="by">${byline}</div>
-    <div class="media">
-      ${
-        imgPath
-          ? `<img src="${esc(publicStorageUrl(supabaseUrl, imgPath)!)}" alt="" width="600" height="800" />`
-          : vidPath
-            ? '<span>Video — open in the app</span>'
-            : cap
-              ? `<span style="padding:20px;text-align:center">${esc(cap)}</span>`
-              : '<span>Campus take</span>'
-      }
-    </div>
-    ${cap && imgPath ? `<p class="cap">${esc(cap)}</p>` : ''}
-    <a class="cta" href="https://joinsidekix.com">post yours →</a>
-    <p class="hint">Preview works in Messages and elsewhere. Full feed lives in the Sidekix app.</p>
+  <div class="shell">
+    ${body}
   </div>
 </body>
 </html>`;
 
-  res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8').setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300').end(html);
+  res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8').setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=600').end(page);
 }

@@ -23,6 +23,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useAppTheme, type ThemePreference } from '../../src/context/AppThemeContext';
 import { Wordmark } from '../../src/components/Wordmark';
 import { MyPostsJournal } from '../../src/components/MyPostsJournal';
+import { useJournalPosts } from '../../src/hooks/useJournalPosts';
 import { useMyPosts } from '../../src/hooks/useMyPosts';
 import { useReadableStorageUrl } from '../../src/hooks/useReadableStorageUrl';
 import { tryGetSupabase } from '../../src/lib/supabase';
@@ -38,6 +39,7 @@ export default function YouScreen() {
   const scheme = resolvedScheme;
   const { user, profile, signOut, deleteAccount, saveProfile, refreshProfile } = useAuth();
   const { posts, refresh } = useMyPosts(user?.id);
+  const { entries: journalEntries, refresh: refreshJournal } = useJournalPosts(user?.id);
   const { displayUri: savedAvatarUrl, onLoadError: onAvatarError } = useReadableStorageUrl(
     profile?.avatar_path ?? null,
   );
@@ -110,7 +112,7 @@ export default function YouScreen() {
 
   const onPull = async () => {
     setRefreshing(true);
-    await Promise.all([refresh(), refreshProfile()]);
+    await Promise.all([refresh(), refreshJournal(), refreshProfile()]);
     setRefreshing(false);
   };
 
@@ -279,7 +281,7 @@ export default function YouScreen() {
             </Text>
           </View>
 
-          <MyPostsJournal posts={posts} colors={colors} />
+          <MyPostsJournal entries={journalEntries} colors={colors} />
         </View>
       </ScrollView>
 

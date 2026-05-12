@@ -5,18 +5,18 @@ import { PostMediaTile } from './PostMediaTile';
 import { localCalendarYmd } from '../lib/calendarDate';
 import { font } from '../theme';
 import type { ThemeColors } from '../theme';
-import type { JournalPost } from '../hooks/useMyPosts';
+import type { JournalPost } from '../hooks/useJournalPosts';
 
 const TABLET_CONTENT_MAX = 640;
 const DAY_THUMB = 56;
 
 type Props = {
-  posts: JournalPost[];
+  entries: JournalPost[];
   colors: ThemeColors;
 };
 
-/** Month calendar + selected-day thumbnails linking to each post’s share screen. */
-export function MyPostsJournal({ posts, colors }: Props) {
+/** Month calendar + selected-day thumbnails (legacy challenges + sidequest adventures). */
+export function MyPostsJournal({ entries, colors }: Props) {
   const router = useRouter();
   const [calendarCursor, setCalendarCursor] = useState(() => new Date());
   const [selectedYmd, setSelectedYmd] = useState(() => localCalendarYmd());
@@ -42,16 +42,20 @@ export function MyPostsJournal({ posts, colors }: Props) {
 
   const postsByYmd = useMemo(() => {
     const map = new Map<string, JournalPost[]>();
-    posts.forEach((p) => {
-      const ymd = localCalendarYmd(new Date(p.created_at));
+    entries.forEach((e) => {
+      const ymd = localCalendarYmd(new Date(e.created_at));
       const cur = map.get(ymd) ?? [];
-      cur.push(p);
+      cur.push(e);
       map.set(ymd, cur);
     });
     return map;
-  }, [posts]);
+  }, [entries]);
 
   const selectedDayPosts = useMemo(() => postsByYmd.get(selectedYmd) ?? [], [postsByYmd, selectedYmd]);
+
+  const openEntry = (e: JournalPost) => {
+    router.push(`/submission/${e.id}`);
+  };
 
   return (
     <View style={{ width: '100%', maxWidth: TABLET_CONTENT_MAX, alignSelf: 'center', marginBottom: 4 }}>
@@ -99,11 +103,12 @@ export function MyPostsJournal({ posts, colors }: Props) {
                 <View style={[styles.calendarCell, hasPosts ? styles.calendarCellFilled : { backgroundColor: 'transparent' }]}>
                   {previewPost ? (
                     <PostMediaTile
-                      post={previewPost}
+                      post={previewPost.tile}
                       style={StyleSheet.absoluteFillObject}
                       borderRadius={0}
                       loadVideo={true}
                       autoPlayVideo={false}
+                      compact
                     />
                   ) : null}
                   <View style={styles.calendarDayWrap}>
@@ -134,13 +139,20 @@ export function MyPostsJournal({ posts, colors }: Props) {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.dayThumbRow}
             >
-              {selectedDayPosts.map((p) => (
+              {selectedDayPosts.map((e) => (
                 <Pressable
-                  key={p.id}
-                  onPress={() => router.push(`/submission/${p.id}`)}
+                  key={e.id}
+                  onPress={() => openEntry(e)}
                   style={[styles.dayThumb, { borderColor: colors.border2, backgroundColor: colors.bg3 }]}
                 >
-                  <PostMediaTile post={p} style={styles.dayThumbInner} borderRadius={6} loadVideo={true} autoPlayVideo={false} />
+                  <PostMediaTile
+                    post={e.tile}
+                    style={styles.dayThumbInner}
+                    borderRadius={6}
+                    loadVideo={true}
+                    autoPlayVideo={false}
+                    compact
+                  />
                 </Pressable>
               ))}
             </ScrollView>

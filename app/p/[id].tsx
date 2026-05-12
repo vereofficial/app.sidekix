@@ -17,9 +17,25 @@ import { useAppTheme } from '../../src/context/AppThemeContext';
 import { MARKETING_SITE_URL } from '../../src/constants/shareLinks';
 import { tryGetSupabase } from '../../src/lib/supabase';
 import { isSupabaseConfigured } from '../../src/lib/supabaseConfig';
+import { activeSidequestTag } from '../../src/lib/sidequestPeriod';
 import { MissingConfigScreen } from '../../src/screens/MissingConfigScreen';
 import { font, getColors } from '../../src/theme';
-import type { ChallengeRow, PostRow, ProfileRow } from '../../src/types/database';
+import type { ChallengeRow, PostRow, ProfileRow, SidequestPostRow, SidequestRow } from '../../src/types/database';
+
+function sidequestPostToPublicTile(sp: SidequestPostRow): PostRow {
+  return {
+    id: sp.id,
+    challenge_id: 'sidequest',
+    user_id: sp.user_id,
+    body: sp.body,
+    image_path: sp.image_path,
+    video_path: sp.video_path,
+    is_anonymous: sp.is_anonymous,
+    caption: sp.body,
+    text_style: null,
+    created_at: sp.created_at ?? new Date().toISOString(),
+  };
+}
 
 /**
  * In-app / client route for `/p/[postId]`. On the web, Vercel rewrites the same path to `api/share-html`
@@ -35,6 +51,7 @@ export default function PublicPostScreen() {
 
   const [post, setPost] = useState<PostRow | null>(null);
   const [challenge, setChallenge] = useState<ChallengeRow | null>(null);
+  const [sidequestTitle, setSidequestTitle] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -52,18 +69,39 @@ export default function PublicPostScreen() {
         return;
       }
       const { data: row, error: pe } = await sb.from('posts').select('*').eq('id', id).maybeSingle();
-      if (pe || !row) {
-        setErr('This post could not be found.');
-        setPost(null);
+      if (!pe && row) {
+        const p = row as PostRow;
+        setPost(p);
+        setSidequestTitle(null);
+        const { data: ch } = await sb.from('challenges').select('*').eq('id', p.challenge_id).maybeSingle();
+        setChallenge((ch as ChallengeRow) ?? null);
+        if (!p.is_anonymous) {
+          const { data: prof } = await sb.from('profiles').select('username').eq('id', p.user_id).maybeSingle();
+          setUsername((prof as ProfileRow | null)?.username ?? null);
+        } else {
+          setUsername(null);
+        }
+        setErr(null);
         setLoading(false);
         return;
       }
-      const p = row as PostRow;
-      setPost(p);
-      const { data: ch } = await sb.from('challenges').select('*').eq('id', p.challenge_id).maybeSingle();
-      setChallenge((ch as ChallengeRow) ?? null);
-      if (!p.is_anonymous) {
-        const { data: prof } = await sb.from('profiles').select('username').eq('id', p.user_id).maybeSingle();
+
+      const { data: sqRow, error: sqe } = await sb.from('sidequest_posts').select('*').eq('id', id).maybeSingle();
+      if (sqe || !sqRow) {
+        setErr('This post could not be found.');
+        setPost(null);
+        setChallenge(null);
+        setSidequestTitle(null);
+        setLoading(false);
+        return;
+      }
+      const sp = sqRow as SidequestPostRow;
+      setPost(sidequestPostToPublicTile(sp));
+      setChallenge(null);
+      const { data: sqMeta } = await sb.from('sidequests').select('title').eq('id', sp.sidequest_id).maybeSingle();
+      setSidequestTitle((sqMeta as Pick<SidequestRow, 'title'> | null)?.title?.trim() || null);
+      if (!sp.is_anonymous) {
+        const { data: prof } = await sb.from('profiles').select('username').eq('id', sp.user_id).maybeSingle();
         setUsername((prof as ProfileRow | null)?.username ?? null);
       } else {
         setUsername(null);
@@ -121,6 +159,8 @@ export default function PublicPostScreen() {
           <Text style={[styles.chTag, { color: colors.text3, fontFamily: font.syne }]}>
             {challengeTag(challenge)}
           </Text>
+        ) : sidequestTitle ? (
+          <Text style={[styles.chTag, { color: colors.text3, fontFamily: font.syne }]}>{activeSidequestTag()}</Text>
         ) : null}
         <Text style={[styles.chTitle, { color: colors.text1, fontFamily: font.syneExtra }]}>
           {chParts && challenge ? (
@@ -129,6 +169,8 @@ export default function PublicPostScreen() {
               <Text style={{ color: colors.accent, fontStyle: 'normal' }}>{challenge.emphasis}</Text>
               {chParts.after}
             </>
+          ) : sidequestTitle ? (
+            sidequestTitle
           ) : (
             'Campus take'
           )}

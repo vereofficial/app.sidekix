@@ -1,4 +1,4 @@
--- Persist "Want to try" / "Done & remembered" per user (cross-device). Client still caches in AsyncStorage for offline.
+-- Persist "Want to try" / "Done & remembered" per user (cross-device). Client mirrors in AsyncStorage for offline.
 
 create table if not exists public.personal_scratchpad_lines (
   id uuid primary key default gen_random_uuid(),

@@ -105,17 +105,6 @@ function postRowToViewerPost(p: PostRow): MediaViewerPost {
   };
 }
 
-/** Text-only cards use the feed “journal” layout (flat paper + category pills), not gradient presets. */
-function isTextOnlyPostLike(p: {
-  image_path?: string | null;
-  video_path?: string | null;
-  body?: string | null;
-  caption?: string | null;
-}): boolean {
-  const cap = (p.body ?? p.caption ?? '').trim();
-  return Boolean(cap) && !p.image_path?.trim() && !p.video_path?.trim();
-}
-
 export default function FeedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -139,14 +128,6 @@ export default function FeedScreen() {
   };
   const { user, isAdmin } = useAuth();
   const { challenge, loading: chLoad, refresh: refCh } = useTodayChallenge();
-  const campusFeedTextTags = useMemo(
-    () =>
-      (challenge?.categories ?? [])
-        .map((c) => String(c).trim())
-        .filter(Boolean)
-        .slice(0, 6),
-    [challenge?.categories],
-  );
   const { posts, myVoteIds, loading, error: postsErr, refresh } = usePostsForChallenge(
     challenge?.id ?? null,
     undefined,
@@ -920,28 +901,20 @@ export default function FeedScreen() {
                             showsHorizontalScrollIndicator={false}
                             contentContainerStyle={styles.previewRow}
                           >
-                            {sq.preview_posts.map((p) => {
-                              const prevTextOnly = isTextOnlyPostLike({
-                                ...p,
-                                caption: p.body,
-                              });
-                              return (
-                                <View key={p.id} style={styles.previewTile}>
-                                  <PostMediaTile
-                                    post={{
-                                      ...p,
-                                      challenge_id: 'sidequest',
-                                      caption: p.body,
-                                      text_style: null,
-                                    }}
-                                    style={styles.previewFill}
-                                    borderRadius={8}
-                                    compact={prevTextOnly}
-                                    textCardStyle={prevTextOnly ? 'feedEditorial' : 'preset'}
-                                  />
-                                </View>
-                              );
-                            })}
+                            {sq.preview_posts.map((p) => (
+                              <View key={p.id} style={styles.previewTile}>
+                                <PostMediaTile
+                                  post={{
+                                    ...p,
+                                    challenge_id: 'sidequest',
+                                    caption: p.body,
+                                    text_style: null,
+                                  }}
+                                  style={styles.previewFill}
+                                  borderRadius={8}
+                                />
+                              </View>
+                            ))}
                           </ScrollView>
                           {sq.completion_count > 0 ? (
                             <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 12, marginTop: 6 }}>
@@ -1019,20 +992,11 @@ export default function FeedScreen() {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.previewRow}
                       >
-                        {row.idea.preview_posts.map((p) => {
-                          const prevTextOnly = isTextOnlyPostLike(p);
-                          return (
-                            <View key={p.id} style={styles.previewTile}>
-                              <PostMediaTile
-                                post={p}
-                                style={styles.previewFill}
-                                borderRadius={8}
-                                compact={prevTextOnly}
-                                textCardStyle={prevTextOnly ? 'feedEditorial' : 'preset'}
-                              />
-                            </View>
-                          );
-                        })}
+                        {row.idea.preview_posts.map((p) => (
+                          <View key={p.id} style={styles.previewTile}>
+                            <PostMediaTile post={p} style={styles.previewFill} borderRadius={8} />
+                          </View>
+                        ))}
                       </ScrollView>
                       {row.idea.completion_count > 0 ? (
                         <Text style={{ color: colors.text3, fontFamily: font.dm, fontSize: 12, marginTop: 6 }}>
@@ -1108,16 +1072,11 @@ export default function FeedScreen() {
                         item.row.source === 'legacy'
                           ? router.push(`/challenge/${item.row.sidequest_id}`)
                           : router.push(`/sidequest/${item.row.sidequest_id}`);
-                      const activityHasMedia = Boolean(
-                        item.row.image_path?.trim() || item.row.video_path?.trim(),
-                      );
-                      const activityTextOnly = isTextOnlyPostLike({
-                        ...item.row,
-                        caption: item.row.body,
-                      });
-                      const showCaptionOrTags =
-                        (activityHasMedia && Boolean(item.row.body?.trim())) ||
-                        (!activityTextOnly && item.row.sidequest_categories.length > 0);
+                      const bodyTrim = (item.row.body ?? '').trim();
+                      const isTextOnlyAdventure =
+                        !item.row.image_path?.trim() &&
+                        !item.row.video_path?.trim() &&
+                        bodyTrim.length > 0;
                       return (
                         <>
                           <Pressable onPress={goQuest}>
@@ -1139,11 +1098,10 @@ export default function FeedScreen() {
                           </Pressable>
                           <Pressable
                             onPress={() => setMediaViewerEntry(item.row)}
-                            style={
-                              activityTextOnly
-                                ? styles.flowingMediaText
-                                : [styles.flowingMedia, { borderRadius: 12, overflow: 'hidden' }]
-                            }
+                            style={[
+                              isTextOnlyAdventure ? styles.flowingMediaText : styles.flowingMedia,
+                              { borderRadius: 12, overflow: 'hidden' },
+                            ]}
                           >
                             <PostMediaTile
                               post={{
@@ -1152,41 +1110,39 @@ export default function FeedScreen() {
                                 caption: item.row.body,
                                 text_style: null,
                               }}
-                              style={activityTextOnly ? { width: '100%' } : { width: '100%', height: '100%' }}
+                              style={{ width: '100%', height: isTextOnlyAdventure ? undefined : '100%' }}
                               borderRadius={12}
-                              textCardStyle={activityTextOnly ? 'feedEditorial' : 'preset'}
-                              textCategoryTags={activityTextOnly ? item.row.sidequest_categories : undefined}
+                              textPresentation={isTextOnlyAdventure ? 'feed' : 'gradient'}
                             />
                           </Pressable>
-                          {showCaptionOrTags ? (
-                            <Pressable onPress={goQuest}>
-                              {activityHasMedia && item.row.body?.trim() ? (
-                                <Text
-                                  style={{
-                                    color: colors.text2,
-                                    marginTop: 10,
-                                    fontFamily: font.dm,
-                                    fontSize: 14,
-                                    lineHeight: 20,
-                                  }}
-                                >
-                                  {item.row.body}
-                                </Text>
-                              ) : null}
-                              {!activityTextOnly ? (
-                                <View style={styles.sidequestTags}>
-                                  {item.row.sidequest_categories.slice(0, 6).map((c) =>
-                                    categoryPill(c, `${item.row.id}-${c}`),
-                                  )}
-                                </View>
-                              ) : null}
-                            </Pressable>
-                          ) : null}
+                          <Pressable onPress={goQuest}>
+                            {!isTextOnlyAdventure && bodyTrim ? (
+                              <Text
+                                style={{ color: colors.text2, marginTop: 10, fontFamily: font.dm, fontSize: 14, lineHeight: 20 }}
+                              >
+                                {bodyTrim}
+                              </Text>
+                            ) : null}
+                            <View style={styles.sidequestTags}>
+                              {item.row.sidequest_categories.slice(0, 6).map((c) =>
+                                categoryPill(c, `${item.row.id}-${c}`),
+                              )}
+                            </View>
+                          </Pressable>
                         </>
                       );
                     })()}
 
-                    <View style={{ marginTop: 10 }}>
+                    <View
+                      style={{
+                        marginTop:
+                          !item.row.image_path?.trim() &&
+                          !item.row.video_path?.trim() &&
+                          (item.row.body ?? '').trim()
+                            ? 6
+                            : 10,
+                      }}
+                    >
                       <PeopleParticipationRow
                         names={item.row.sidequest_people}
                         count={item.row.sidequest_completion_count}
@@ -1613,18 +1569,11 @@ export default function FeedScreen() {
               <View style={[styles.grid, sparseCampusFeed && styles.gridSparse]}>
                 {visible.map((c) => {
                   const voted = myVoteIds.has(c.id);
-                  const campusTextOnly = isTextOnlyPostLike(c);
                   return (
                     <View key={c.id} style={[styles.card, sparseCampusFeed && styles.cardSparse]}>
                       <View style={{ width: '100%', aspectRatio: 3 / 4, borderRadius: 12, overflow: 'hidden' }}>
                         <Pressable onPress={() => setGridViewerPost(c)} style={StyleSheet.absoluteFillObject}>
-                          <PostMediaTile
-                            post={c}
-                            style={StyleSheet.absoluteFillObject}
-                            borderRadius={12}
-                            textCardStyle={campusTextOnly ? 'feedEditorial' : 'preset'}
-                            textCategoryTags={campusTextOnly ? campusFeedTextTags : undefined}
-                          />
+                          <PostMediaTile post={c} style={StyleSheet.absoluteFillObject} borderRadius={12} />
                           <LinearGradient
                             colors={['transparent', 'rgba(0,0,0,0.82)']}
                             style={styles.cardFade}
@@ -1964,8 +1913,8 @@ const styles = StyleSheet.create({
   previewTile: { width: 54, height: 54, borderRadius: 8, overflow: 'hidden' },
   previewFill: { width: '100%', height: '100%' },
   flowingMedia: { width: '100%', aspectRatio: 4 / 3, borderRadius: 10, overflow: 'hidden' },
-  /** Text-only adventures: height follows copy + tags (no empty 4:3 frame). */
-  flowingMediaText: { width: '100%', borderRadius: 12, overflow: 'hidden' },
+  /** Text-only adventure on activity feed: no tall empty frame below the copy. */
+  flowingMediaText: { width: '100%', borderRadius: 10, overflow: 'hidden', alignSelf: 'stretch' },
   modRow: { marginTop: 8, flexDirection: 'row', gap: 8 },
   modBtn: { borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12 },
   toggleWrap: { flexDirection: 'row', borderRadius: 14, padding: 2 },

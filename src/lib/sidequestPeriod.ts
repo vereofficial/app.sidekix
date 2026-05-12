@@ -62,14 +62,9 @@ export function sidequestDeadlineSentence(d: Date = new Date()): string {
   return `you have until ${activeSidequestDeadlinePhrase(d)}.`;
 }
 
-/** Short label for UI chips (drop overlay, etc.). */
-export function activeSidequestSlotLabel(d: Date = new Date()): string {
-  return activeSidequestSlot(d) === 'weekday' ? 'mon–thu' : 'fri–sun';
-}
-
-/** Small tag line: "this challenge · mon–thu" / "fri–sun" (no serial number). */
-export function activeSidequestTag(d: Date = new Date()): string {
-  return `this challenge · ${activeSidequestSlotLabel(d)}`;
+/** Uppercase-style tag above challenge titles (legacy weekly challenges). */
+export function activeSidequestTag(_d: Date = new Date()): string {
+  return 'this challenge';
 }
 
 function ymdsFromStart(startMidnight: Date, dayCount: number): string[] {

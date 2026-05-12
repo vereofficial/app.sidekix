@@ -1,13 +1,11 @@
 import { Image } from 'expo-image';
 import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useAppTheme } from '../context/AppThemeContext';
 import { useReadableStorageUrl } from '../hooks/useReadableStorageUrl';
 import type { PostRow } from '../types/database';
-import { feedCategoryChipParts } from '../lib/categoryDisplay';
-import { feedV3TagSkin } from '../lib/feedV3Tokens';
 import { getTextPostPreset } from '../lib/textPostPresets';
 import { textMetricsForLength } from '../lib/textPostTextMetrics';
 import { HAS_EXPO_AV_VIDEO } from '../lib/videoSupport';
@@ -21,23 +19,21 @@ export function PostMediaTile({
   borderRadius = 12,
   /** Tiny squares (e.g. past sidequest row) — tighter text preview. */
   compact = false,
+  /** Feed activity: plain text on surface, no gradient card (avoids duplicate caption box). */
+  textPresentation = 'gradient',
   loadVideo = true,
   autoPlayVideo = false,
-  /** Flat journal-style text card (feed) instead of gradient presets. */
-  textCardStyle = 'preset',
-  /** Shown on `feedEditorial` full-size cards (e.g. challenge / sidequest category chips). */
-  textCategoryTags,
 }: {
   post: PostLike;
   style?: ViewStyle;
   borderRadius?: number;
   compact?: boolean;
+  textPresentation?: 'gradient' | 'feed';
   loadVideo?: boolean;
   autoPlayVideo?: boolean;
-  textCardStyle?: 'preset' | 'feedEditorial';
-  textCategoryTags?: string[];
 }) {
   const videoRef = useRef<InstanceType<typeof Video> | null>(null);
+  const hasPrimedFirstFrameRef = useRef(false);
   const { resolvedScheme } = useAppTheme();
   const colors = getColors(resolvedScheme);
   const base = [{ borderRadius, overflow: 'hidden' as const }, style];
@@ -45,7 +41,30 @@ export function PostMediaTile({
   const hasImage = Boolean(post.image_path?.trim());
   const hasVideo = Boolean(post.video_path?.trim());
   const videoMedia = useReadableStorageUrl(hasVideo && loadVideo ? post.video_path : null);
+  /** Still image stored alongside video (if any) — used as poster so tiles are not a black rectangle before decode. */
+  const videoPosterMedia = useReadableStorageUrl(
+    hasVideo && loadVideo && post.image_path?.trim() ? post.image_path : null,
+  );
   const imageMedia = useReadableStorageUrl(hasImage ? post.image_path : null);
+
+  useEffect(() => {
+    hasPrimedFirstFrameRef.current = false;
+  }, [videoMedia.displayUri]);
+
+  const primeVideoFirstFrame = useCallback(async () => {
+    if (autoPlayVideo || hasPrimedFirstFrameRef.current) return;
+    const v = videoRef.current;
+    if (!v) return;
+    hasPrimedFirstFrameRef.current = true;
+    try {
+      await v.playAsync();
+      await new Promise<void>((r) => setTimeout(r, 120));
+      await v.pauseAsync();
+      await v.setPositionAsync(0);
+    } catch {
+      hasPrimedFirstFrameRef.current = false;
+    }
+  }, [autoPlayVideo]);
 
   if (hasVideo) {
     if (loadVideo === false || !HAS_EXPO_AV_VIDEO) {
@@ -61,6 +80,9 @@ export function PostMediaTile({
         </View>
       );
     }
+    const posterUri = videoPosterMedia.displayUri;
+    const usePoster = Boolean(posterUri);
+
     return (
       <LinearGradient
         colors={resolvedScheme === 'dark' ? ['#1a1a1a', '#0a0a0a'] : ['#e8e6e0', '#d5d1c8']}
@@ -76,9 +98,15 @@ export function PostMediaTile({
             shouldPlay={autoPlayVideo}
             isLooping={autoPlayVideo}
             isMuted
-            onError={videoMedia.onLoadError}
+            usePoster={usePoster}
+            posterSource={usePoster ? { uri: posterUri! } : undefined}
+            posterStyle={StyleSheet.absoluteFillObject}
+            onError={() => videoMedia.onLoadError()}
             onLoad={() => {
-              if (!autoPlayVideo) void videoRef.current?.setPositionAsync(0);
+              if (!autoPlayVideo) void primeVideoFirstFrame();
+            }}
+            onReadyForDisplay={() => {
+              if (!autoPlayVideo) void primeVideoFirstFrame();
             }}
           />
         ) : (
@@ -95,7 +123,6 @@ export function PostMediaTile({
       <View style={base}>
         {imageMedia.displayUri ? (
           <Image
-            key={imageMedia.displayUri}
             source={{ uri: imageMedia.displayUri }}
             style={StyleSheet.absoluteFillObject}
             contentFit="cover"
@@ -112,64 +139,40 @@ export function PostMediaTile({
   }
 
   if (cap) {
-    const isDark = resolvedScheme === 'dark';
-
-    if (textCardStyle === 'feedEditorial') {
-      const metrics = textMetricsForLength(cap.length, compact);
-      const tk = feedV3TagSkin(resolvedScheme);
-      const tags = (textCategoryTags ?? []).filter(Boolean).slice(0, 6);
-
+    if (textPresentation === 'feed') {
+      const metrics = textMetricsForLength(cap.length, false);
       return (
         <View
           style={[
             ...base,
             {
+              paddingHorizontal: 4,
+              paddingVertical: 6,
+              justifyContent: 'flex-start',
               backgroundColor: 'transparent',
-              borderWidth: 0,
-              flexDirection: 'column',
             },
           ]}
+          accessibilityLabel="Text post"
         >
-          <View style={compact ? [styles.textBodyWrap, styles.textBodyWrapCompact] : styles.editorialBody}>
-            <Text
-              style={{
-                color: colors.text1,
-                fontFamily: font.serifItalic,
-                textAlign: compact ? 'center' : 'left',
-                width: '100%',
-                fontSize: metrics.fontSize,
-                lineHeight: metrics.lineHeight,
-                letterSpacing: compact ? -0.1 : 0,
-              }}
-              numberOfLines={metrics.maxLines}
-            >
-              {cap}
-            </Text>
-          </View>
-          {!compact && tags.length > 0 ? (
-            <View style={styles.editorialTagsRow}>
-              {tags.map((raw, i) => {
-                const { emoji, title } = feedCategoryChipParts(raw);
-                return (
-                  <View
-                    key={`${raw}-${i}`}
-                    style={[
-                      styles.editorialTagPill,
-                      { borderColor: tk.borderColor, backgroundColor: tk.backgroundColor },
-                    ]}
-                  >
-                    <Text style={styles.editorialTagEmoji}>{emoji}</Text>
-                    <Text style={[styles.editorialTagWord, { color: tk.color, fontFamily: font.dmBold }]}>{title}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          ) : null}
+          <Text
+            style={{
+              color: colors.text1,
+              fontFamily: font.serifItalic,
+              width: '100%',
+              fontSize: metrics.fontSize,
+              lineHeight: metrics.lineHeight,
+              letterSpacing: 0.2,
+            }}
+            numberOfLines={metrics.maxLines}
+          >
+            {cap}
+          </Text>
         </View>
       );
     }
 
     const preset = getTextPostPreset(post.text_style);
+    const isDark = resolvedScheme === 'dark';
     const stops = isDark ? preset.dark : preset.light;
     const borderC = isDark ? preset.accentBorderDark : preset.accentBorderLight;
     const fg = isDark ? preset.textDark : preset.textLight;
@@ -290,34 +293,6 @@ const styles = StyleSheet.create({
     paddingBottom: 9,
     justifyContent: 'flex-start',
   },
-  /** Feed editorial: no flex grow — avoids a tall empty gap above category pills. */
-  editorialBody: {
-    width: '100%',
-    alignSelf: 'stretch',
-    paddingTop: 4,
-    paddingBottom: 2,
-    justifyContent: 'flex-start',
-    alignItems: 'stretch',
-  },
-  editorialTagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingTop: 6,
-    paddingBottom: 4,
-  },
-  editorialTagPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    maxWidth: '100%',
-  },
-  editorialTagEmoji: { fontSize: 13, lineHeight: 16 },
-  editorialTagWord: { fontSize: 10.5, lineHeight: 14 },
   textBodyWrapCompact: {
     paddingHorizontal: 5,
     paddingVertical: 4,

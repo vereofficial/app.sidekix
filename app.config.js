@@ -31,12 +31,5 @@ module.exports = ({ config }) => ({
     ...config.extra,
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-    /** R2 reads: must match Cloudflare public bucket / custom domain (see supabase/functions/README.md). */
-    useR2Media: truthyEnv(process.env.EXPO_PUBLIC_USE_R2_MEDIA),
-    r2PublicMediaUrl: (
-      process.env.EXPO_PUBLIC_R2_PUBLIC_MEDIA_URL ||
-      process.env.R2_PUBLIC_MEDIA_URL ||
-      ''
-    ).trim(),
   },
 });
