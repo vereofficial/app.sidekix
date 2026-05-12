@@ -13,7 +13,144 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const IOS_APP_STORE_LISTING_URL = 'https://apps.apple.com/app/id6742329686';
 
 /** Bumped when share SSR changes. Live site: inspect `<html>` for this attribute. */
-const SHARE_SSR_REVISION = '20260607a';
+const SHARE_SSR_REVISION = '20260607b';
+
+/** Web fonts: DM Sans + DM Mono (matches `src/theme.ts` roles for UI). */
+const SHARE_GOOGLE_FONTS =
+  'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700&display=swap';
+
+/** CSS using `darkColors` from `src/theme.ts` — no Syne; titles use DM Sans bold like in-app. */
+function sharePageCss(): string {
+  return `
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      font-weight: 400;
+      background: #0A0A0A;
+      color: #F0EDE6;
+      -webkit-font-smoothing: antialiased;
+    }
+    .shell { max-width: 440px; margin: 0 auto; padding: 28px 20px 56px; }
+    .pill {
+      display: inline-block;
+      font-family: 'DM Mono', ui-monospace, monospace;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #D4FF3F;
+      border: 1px solid rgba(212, 255, 63, 0.28);
+      border-radius: 999px;
+      padding: 7px 14px;
+      margin-bottom: 18px;
+      background: rgba(212, 255, 63, 0.12);
+    }
+    h1 {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 1.125rem;
+      line-height: 1.35;
+      letter-spacing: -0.02em;
+      margin: 0 0 10px;
+      color: #F0EDE6;
+    }
+    h1 .em { color: #D4FF3F; font-weight: 700; }
+    .by {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      color: #8A8680;
+      margin-bottom: 22px;
+    }
+    .card {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: #141414;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+      aspect-ratio: 3 / 4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .card img, .card video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .card .textfill {
+      padding: 22px 20px;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 1rem;
+      font-weight: 400;
+      line-height: 1.45;
+      color: #F0EDE6;
+      text-align: left;
+      align-self: stretch;
+      overflow: auto;
+    }
+    .vid-fallback {
+      text-align: center;
+      padding: 28px 20px;
+      color: #8A8680;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .vid-fallback .play {
+      width: 64px; height: 64px; margin: 0 auto 14px;
+      border-radius: 50%;
+      border: 2px solid rgba(212,255,63,0.45);
+      color: #D4FF3F;
+      font-size: 28px;
+      line-height: 60px;
+      font-weight: 700;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .cap {
+      margin-top: 18px;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 15px;
+      font-weight: 400;
+      line-height: 1.5;
+      color: #8A8680;
+      white-space: pre-wrap;
+    }
+    .cta {
+      display: block;
+      margin-top: 28px;
+      text-align: center;
+      padding: 16px 22px;
+      border-radius: 999px;
+      background: #D4FF3F;
+      color: #0a0a0a !important;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      text-decoration: none;
+      border: none;
+      box-shadow: 0 8px 24px rgba(212, 255, 63, 0.18);
+    }
+    .err {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      color: #5A5755;
+      font-size: 15px;
+      line-height: 1.55;
+      margin-top: 8px;
+    }
+    .code {
+      font-family: 'DM Mono', ui-monospace, monospace;
+      font-size: 11px;
+      color: #5A5755;
+      margin-top: 16px;
+      word-break: break-all;
+    }
+  `;
+}
 
 function esc(s: string): string {
   return s
@@ -44,118 +181,12 @@ function htmlShell(docTitle: string, inner: string): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="theme-color" content="#0A0A0A" />
   <title>${esc(docTitle)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,800;1,9..40,400&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: 'DM Sans', system-ui, sans-serif;
-      background: radial-gradient(120% 80% at 50% -10%, #1a2210 0%, #0a0a0a 45%, #050505 100%);
-      color: #eceae6;
-      -webkit-font-smoothing: antialiased;
-    }
-    .shell { max-width: 440px; margin: 0 auto; padding: 28px 20px 56px; }
-    .pill {
-      display: inline-block;
-      font-family: 'Syne', sans-serif;
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: #c8e060;
-      border: 1px solid rgba(212, 255, 63, 0.35);
-      border-radius: 999px;
-      padding: 7px 14px;
-      margin-bottom: 18px;
-      background: rgba(212, 255, 63, 0.06);
-    }
-    h1 {
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
-      font-size: 1.45rem;
-      line-height: 1.2;
-      letter-spacing: -0.03em;
-      margin: 0 0 10px;
-      color: #f4f2ec;
-    }
-    h1 .em { color: #d4ff3f; }
-    .by {
-      font-size: 14px;
-      color: #9a968c;
-      margin-bottom: 22px;
-    }
-    .card {
-      border-radius: 20px;
-      overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.35) 100%);
-      box-shadow: 0 24px 48px rgba(0,0,0,0.45);
-      aspect-ratio: 3 / 4;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-    }
-    .card img, .card video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-    .card .textfill {
-      padding: 22px 20px;
-      font-size: 1.05rem;
-      line-height: 1.45;
-      color: #f0ebe3;
-      text-align: left;
-      align-self: stretch;
-      overflow: auto;
-    }
-    .vid-fallback {
-      text-align: center;
-      padding: 28px 20px;
-      color: #9a968c;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    .vid-fallback .play {
-      width: 64px; height: 64px; margin: 0 auto 14px;
-      border-radius: 50%;
-      border: 2px solid rgba(212,255,63,0.5);
-      color: #d4ff3f;
-      font-size: 28px;
-      line-height: 60px;
-      font-weight: 700;
-    }
-    .cap {
-      margin-top: 18px;
-      font-size: 15px;
-      line-height: 1.5;
-      color: #c9c4ba;
-      white-space: pre-wrap;
-    }
-    .cta {
-      display: block;
-      margin-top: 28px;
-      text-align: center;
-      padding: 16px 22px;
-      border-radius: 999px;
-      background: linear-gradient(90deg, #5a7a00, #6d8f00);
-      color: #fff !important;
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
-      font-size: 15px;
-      text-decoration: none;
-      box-shadow: 0 12px 28px rgba(90, 122, 0, 0.35);
-    }
-    .err { color: #c9c4ba; font-size: 15px; line-height: 1.55; margin-top: 8px; }
-    .code { font-size: 12px; color: #6d6a62; margin-top: 16px; word-break: break-all; }
-  </style>
+  <link href="${SHARE_GOOGLE_FONTS}" rel="stylesheet" />
+  <style>${sharePageCss()}</style>
 </head>
 <body>
   <div class="shell">
@@ -361,7 +392,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="theme-color" content="#0A0A0A" />
   <title>${esc(ogTitle)}</title>
   <link rel="canonical" href="${esc(canonical)}" />
   <meta property="og:title" content="${esc(ogTitle)}" />
@@ -377,97 +408,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta name="description" content="${esc(ogDesc)}" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: 'DM Sans', system-ui, sans-serif;
-      background: radial-gradient(120% 80% at 50% -10%, #1a2210 0%, #0a0a0a 45%, #050505 100%);
-      color: #eceae6;
-      -webkit-font-smoothing: antialiased;
-    }
-    .shell { max-width: 440px; margin: 0 auto; padding: 28px 20px 56px; }
-    .pill {
-      display: inline-block;
-      font-family: 'Syne', sans-serif;
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: #c8e060;
-      border: 1px solid rgba(212, 255, 63, 0.35);
-      border-radius: 999px;
-      padding: 7px 14px;
-      margin-bottom: 18px;
-      background: rgba(212, 255, 63, 0.06);
-    }
-    h1 {
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
-      font-size: 1.45rem;
-      line-height: 1.2;
-      letter-spacing: -0.03em;
-      margin: 0 0 10px;
-      color: #f4f2ec;
-    }
-    h1 .em { color: #d4ff3f; }
-    .by { font-size: 14px; color: #9a968c; margin-bottom: 22px; }
-    .card {
-      border-radius: 20px;
-      overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.35) 100%);
-      box-shadow: 0 24px 48px rgba(0,0,0,0.45);
-      aspect-ratio: 3 / 4;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-    }
-    .card img, .card video { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .card .textfill {
-      padding: 22px 20px;
-      font-size: 1.05rem;
-      line-height: 1.45;
-      color: #f0ebe3;
-      text-align: left;
-      align-self: stretch;
-      overflow: auto;
-    }
-    .vid-fallback {
-      text-align: center;
-      padding: 28px 20px;
-      color: #9a968c;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    .vid-fallback .play {
-      width: 64px; height: 64px; margin: 0 auto 14px;
-      border-radius: 50%;
-      border: 2px solid rgba(212,255,63,0.5);
-      color: #d4ff3f;
-      font-size: 28px;
-      line-height: 60px;
-      font-weight: 700;
-    }
-    .cap { margin-top: 18px; font-size: 15px; line-height: 1.5; color: #c9c4ba; white-space: pre-wrap; }
-    .cta {
-      display: block;
-      margin-top: 28px;
-      text-align: center;
-      padding: 16px 22px;
-      border-radius: 999px;
-      background: linear-gradient(90deg, #5a7a00, #6d8f00);
-      color: #fff !important;
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
-      font-size: 15px;
-      text-decoration: none;
-      box-shadow: 0 12px 28px rgba(90, 122, 0, 0.35);
-    }
-  </style>
+  <link href="${SHARE_GOOGLE_FONTS}" rel="stylesheet" />
+  <style>${sharePageCss()}</style>
 </head>
 <body>
   <div class="shell">
