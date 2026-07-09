@@ -2,7 +2,7 @@
 /**
  * Light Supabase ping to prevent Free-tier inactivity pause (7 days with no API/DB activity).
  *
- * Hits PostgREST with the anon key — same auth the app uses for `app_release_config`.
+ * Hits Supabase Auth health — works on every project (no custom tables/migrations).
  * Safe to run from GitHub Actions (no service role required).
  *
  * Env (or .env in repo root):
@@ -59,19 +59,25 @@ const anonKey =
 
 if (!base) {
   console.error(
-    'Missing SUPABASE_URL or EXPO_PUBLIC_SUPABASE_URL. Add your Supabase project URL to .env.',
+    'Missing SUPABASE_URL or EXPO_PUBLIC_SUPABASE_URL.',
+  );
+  console.error(
+    'GitHub Actions: add repository secret EXPO_PUBLIC_SUPABASE_URL (https://xxx.supabase.co).',
   );
   process.exit(1);
 }
 if (!anonKey) {
   console.error(
-    'Missing SUPABASE_ANON_KEY or EXPO_PUBLIC_SUPABASE_ANON_KEY. Use the anon key from Supabase → Settings → API.',
+    'Missing SUPABASE_ANON_KEY or EXPO_PUBLIC_SUPABASE_ANON_KEY.',
+  );
+  console.error(
+    'GitHub Actions: add repository secret EXPO_PUBLIC_SUPABASE_ANON_KEY (Supabase → Settings → API → anon).',
   );
   process.exit(1);
 }
 
-// Public read table (see migration 033_app_release_config.sql) — one row, minimal cost.
-const url = `${base}/rest/v1/app_release_config?select=id&limit=1`;
+// Universal endpoint — no DB table required (unlike app_release_config).
+const url = `${base}/auth/v1/health`;
 
 const started = Date.now();
 const res = await fetch(url, {
@@ -89,20 +95,17 @@ const elapsedMs = Date.now() - started;
 if (!res.ok) {
   console.error(`Keepalive failed: HTTP ${res.status} (${elapsedMs}ms)`);
   console.error(text.slice(0, 500));
+  if (res.status === 401) {
+    console.error('Check EXPO_PUBLIC_SUPABASE_ANON_KEY — wrong key or typo in secret name.');
+  }
   process.exit(1);
 }
 
-let rows;
+let body;
 try {
-  rows = JSON.parse(text);
+  body = JSON.parse(text);
 } catch {
   console.error(`Keepalive failed: invalid JSON (${elapsedMs}ms)`);
-  console.error(text.slice(0, 500));
-  process.exit(1);
-}
-
-if (!Array.isArray(rows)) {
-  console.error(`Keepalive failed: unexpected response (${elapsedMs}ms)`);
   console.error(text.slice(0, 500));
   process.exit(1);
 }
@@ -111,7 +114,8 @@ console.log(
   JSON.stringify({
     ok: true,
     project: base,
-    rows: rows.length,
+    endpoint: '/auth/v1/health',
+    response: body,
     elapsedMs,
     at: new Date().toISOString(),
   }),
