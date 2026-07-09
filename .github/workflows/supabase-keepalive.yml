@@ -1,0 +1,26 @@
+# Prevent Supabase Free-tier inactivity pause (7 days with no API/DB activity).
+# Add repo secrets: EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY
+name: Supabase keepalive
+
+on:
+  schedule:
+    # Mon, Wed, Fri at 14:00 UTC — well inside the 7-day window.
+    - cron: '0 14 * * 1,3,5'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Ping Supabase
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: node scripts/supabase-keepalive.mjs
